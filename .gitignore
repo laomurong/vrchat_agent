@@ -50,3 +50,14 @@ deploy-vrfy-*/
 *.onnx
 *.pt
 *.bin
+
+# 开发信息（不入库）
+docs/
+overview.md
+*.bak
+debug_*.py
+requirements-dev.txt
+qa-*.log
+qa-*.txt
+package_test.log
+r2_smoke.py
