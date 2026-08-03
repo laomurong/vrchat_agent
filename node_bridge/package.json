@@ -1,0 +1,15 @@
+{
+  "name": "vrchat-agent-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VRChat Agent OSC 桥接：复用 @iflow-mcp/krekun-vrchat-mcp-osc（vrchat-mcp-osc 社区 npm 包装包，Node.js MCP server）。Python 主编排通过 MCP stdio 调用 OSC 工具。",
+  "scripts": {
+    "start": "node node_modules/@iflow-mcp/krekun-vrchat-mcp-osc/packages/mcp-server/dist/server.js",
+    "postinstall": "node scripts/patch-krekun-utils.js && node scripts/patch-krekun-osc-crouch.js && node scripts/patch-krekun-osc-look-updown.js && node scripts/patch-krekun-osc-expand.js"
+  },
+  "dependencies": {
+    "@iflow-mcp/krekun-vrchat-mcp-osc": "^0.1.3",
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "winston": "^3.11.0"
+  }
+}

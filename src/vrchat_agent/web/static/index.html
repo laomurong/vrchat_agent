@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VRChat Agent 控制台</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel2: #1e2230;
+    --border: #2a2f42;
+    --text: #e8eaf2;
+    --muted: #8b93ab;
+    --accent: #6c8cff;
+    --ok: #3ecf8e;
+    --warn: #f5a623;
+    --danger: #ff5c6c;
+    --hot: #3ecf8e;
+    --restart: #f5a623;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  #app { display: flex; min-height: 100vh; }
+  /* ---- 左侧导航 ---- */
+  nav {
+    width: 168px; background: var(--panel); border-right: 1px solid var(--border);
+    padding: 16px 10px; flex-shrink: 0;
+  }
+  nav h1 { font-size: 14px; margin: 0 0 18px 6px; color: var(--accent); letter-spacing: .5px; }
+  nav button {
+    display: block; width: 100%; text-align: left; padding: 10px 12px; margin: 4px 0;
+    background: transparent; border: 1px solid transparent; border-radius: 8px;
+    color: var(--muted); font-size: 14px; cursor: pointer;
+  }
+  nav button.active { background: var(--panel2); color: var(--text); border-color: var(--border); }
+  nav button:disabled { opacity: .45; cursor: not-allowed; }
+  nav .badge { font-size: 11px; color: var(--muted); margin-left: 4px; }
+  /* ---- 主内容 ---- */
+  main { flex: 1; padding: 20px 24px; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+  h2 { margin: 0 0 14px; font-size: 18px; }
+  /* ---- 状态卡片 ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .card .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .card .value { font-size: 15px; word-break: break-word; }
+  .state-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+  .dot-IDLE { background: #3ecf8e; } .dot-LISTENING { background: #f5d44a; }
+  .dot-THINKING { background: #6c8cff; } .dot-SPEAKING { background: #c792ff; }
+  .dot-ACTION { background: #e8eaf2; } .dot-EMERGENCY_STOP { background: #ff5c6c; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .panel h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); font-weight: 600; }
+  #timeline { max-height: 240px; overflow-y: auto; font-size: 12.5px; color: var(--muted); }
+  #timeline .tl-row { padding: 3px 0; border-bottom: 1px dashed var(--border); }
+  #timeline .tl-time { color: var(--muted); margin-right: 8px; }
+  #timeline .tl-type { color: var(--accent); margin-right: 8px; }
+  /* ---- 按钮 ---- */
+  .btn {
+    padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel2); color: var(--text); cursor: pointer; font-size: 14px;
+  }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:disabled { opacity: .6; cursor: wait; }
+  .btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+  .btn.danger:disabled { opacity: .4; cursor: not-allowed; }
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  /* ---- 参数表单 ---- */
+  fieldset {
+    border: 1px solid var(--border); border-radius: 10px; margin: 0 0 14px; padding: 12px 14px;
+  }
+  legend { color: var(--accent); font-weight: 600; padding: 0 6px; font-size: 13px; }
+  .field { display: grid; grid-template-columns: 240px 1fr auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+  .field:last-child { border-bottom: none; }
+  .field label { color: var(--text); font-size: 13px; word-break: break-all; }
+  .field .path { color: var(--muted); font-size: 11px; display: block; }
+  .field input[type="text"], .field input[type="number"], .field select, .field textarea {
+    width: 100%; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--panel2); color: var(--text); font-size: 13px;
+  }
+  .field input:disabled { opacity: .55; }
+  .field textarea { resize: vertical; min-height: 44px; font-family: inherit; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .tag.hot { color: var(--hot); border: 1px solid var(--hot); }
+  .tag.restart { color: var(--restart); border: 1px solid var(--restart); }
+  .tag.sensitive { color: var(--danger); border: 1px solid var(--danger); }
+  #saveResult { margin-top: 10px; font-size: 13px; }
+  #saveResult.ok { color: var(--ok); }
+  #saveResult.warn { color: var(--restart); }
+  #saveResult.err { color: var(--danger); }
+  #ctrl-feedback.ok { color: var(--ok); }
+  #ctrl-feedback.err { color: var(--danger); }
+  .conn { font-size: 12px; color: var(--muted); }
+  .conn.on { color: var(--ok); }
+  .conn.off { color: var(--danger); }
+  /* ---- 流水线面板（P2-1）---- */
+  #pipeline-panel .utt-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--border); font-size: 12.5px; }
+  #pipeline-panel .utt-id { color: var(--muted); font-family: monospace; font-size: 11px; }
+  #pipeline-panel .utt-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .phase-tag { font-size: 10.5px; padding: 1px 7px; border-radius: 8px; white-space: nowrap; line-height: 1.5; }
+  .phase-asr_done { color: #a0a4b8; border: 1px solid #a0a4b8; }
+  .phase-llm_running { color: #6c8cff; border: 1px solid #6c8cff; }
+  .phase-llm_done { color: #6c8cff; border: 1px solid #6c8cff; background: rgba(108,140,255,.1); }
+  .phase-tts_running { color: #f5a623; border: 1px solid #f5a623; }
+  .phase-tts_done { color: #f5a623; border: 1px solid #f5a623; background: rgba(245,166,35,.1); }
+  .phase-queued { color: #8b93ab; border: 1px solid #8b93ab; }
+  .phase-speaking { color: #3ecf8e; border: 1px solid #3ecf8e; background: rgba(62,207,142,.1); }
+  .pipeline-bar { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pipeline-bar .badge-num { color: var(--accent); font-weight: 600; }
+  #btn-skip { margin-left: auto; }
+  #btn-skip:disabled { opacity: .45; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div id="app">
+  <nav>
+    <h1>VRChat Agent</h1>
+    <button id="nav-status" class="active" data-page="status">① 状态</button>
+    <button id="nav-config" data-page="config">② 参数</button>
+    <button id="nav-logs" data-page="logs" disabled>③ 日志 <span class="badge">P1</span></button>
+    <button id="nav-memory" data-page="memory">④ 记忆</button>
+  </nav>
+  <main>
+    <!-- ============ ① 状态页 ============ -->
+    <section id="page-status" class="page active">
+      <div class="toolbar">
+        <h2 style="margin:0">状态</h2>
+        <span id="conn" class="conn off">● 未连接</span>
+        <span style="flex:1"></span>
+        <button id="btn-emergency" class="btn danger" title="立即静音输出并复位所有动作">🛑 紧急停止</button>
+      </div>
+      <!-- 控制区（任务 2：B2 前端操控） -->
+      <div class="panel" id="ctrl-panel">
+        <h3>控制</h3>
+        <div class="toolbar" style="margin-bottom:8px">
+          <span id="ctrl-state" class="tag">—</span>
+          <span id="ctrl-uptime" class="conn" style="color:var(--muted)">运行时长 —</span>
+          <span style="flex:1"></span>
+          <button id="btn-pause" class="btn" title="暂停监听：忽略语音触发（不退出进程）">⏸ 暂停</button>
+          <button id="btn-resume" class="btn primary" style="display:none" title="恢复监听">▶ 恢复</button>
+          <button id="btn-ctrl-restart" class="btn" title="优雅关闭后自动拉起新进程（重新加载配置）">🔄 重启</button>
+          <button id="btn-ctrl-emergency" class="btn danger" title="立即静音输出并复位所有动作">🛑 紧急停止</button>
+          <button id="btn-ctrl-shutdown" class="btn danger" title="优雅关闭 Agent 主循环">⏻ 关闭 Agent</button>
+        </div>
+        <div id="ctrl-feedback" style="font-size:12.5px;min-height:16px"></div>
+      </div>
+      <!-- 流水线状态（P2-1 / P2-3） -->
+      <div class="panel" id="pipeline-panel" style="display:none">
+        <h3>流水线 <span id="pipe-queue-badge" style="font-size:11px;color:var(--muted)"></span></h3>
+        <div id="pipe-list"><div style="color:var(--muted);font-size:12px">暂无活跃 utterance</div></div>
+        <div class="pipeline-bar">
+          <span>输出队列：<span class="badge-num" id="pipe-queue-size">0</span> 条</span>
+          <span id="pipe-playing" style="display:none">当前播放：<span class="badge-num" id="pipe-playing-text"></span> · 剩余 <span class="badge-num" id="pipe-playing-remaining">0.0s</span></span>
+          <button id="btn-skip" class="btn" disabled title="跳过当前播放，立即播放下一条">⏭ 跳过当前</button>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="label">当前状态</div><div class="value"><span id="state-dot" class="state-dot dot-IDLE"></span><span id="state">空闲</span></div></div>
+        <div class="card"><div class="label">运行时长</div><div class="value" id="uptime">00:00:00</div></div>
+        <div class="card"><div class="label">最近听到</div><div class="value" id="utterance">—</div></div>
+        <div class="card"><div class="label">最近回复</div><div class="value" id="reply">—</div></div>
+        <div class="card"><div class="label">当前动作</div><div class="value" id="actions">—</div></div>
+        <div class="card"><div class="label">听→说延迟</div><div class="value" id="latency">0.0s</div></div>
+      </div>
+      <div class="panel">
+        <h3>用量统计</h3>
+        <div id="usage">LLM 调用 <b>0</b> 次 · TTS 调用 <b>0</b> 次 · 预估成本 ≈ <b>¥0.0000</b></div>
+      </div>
+      <div class="panel">
+        <h3>事件时间线</h3>
+        <div id="timeline"><div class="tl-row">等待事件…</div></div>
+      </div>
+    </section>
+
+    <!-- ============ ② 参数页 ============ -->
+    <section id="page-config" class="page">
+      <div class="toolbar">
+        <h2 style="margin:0">参数配置</h2>
+        <span style="flex:1"></span>
+        <button id="btn-reset" class="btn" title="恢复为当前已保存配置">重置</button>
+        <button id="btn-save" class="btn primary">保存并热重载</button>
+      </div>
+      <div class="panel">
+        <div style="color:var(--muted);font-size:12px;margin-bottom:12px">
+          <span class="tag hot">♻ 可热重载</span> 保存后即时生效 ·
+          <span class="tag restart">⚠ 需重启</span> 保存后需重启进程生效 ·
+          <span class="tag sensitive">🔒 敏感</span> 只读掩码展示（由 .env 管理，P1 支持编辑）
+        </div>
+        <form id="config-form" autocomplete="off"></form>
+        <div id="saveResult"></div>
+      </div>
+      <!-- 音色克隆（CosyVoice）：克隆 → 设为当前音色 → 下次合成直接复用 -->
+      <div class="panel" id="voice-panel">
+        <h3>音色克隆（CosyVoice）<span class="tag restart" style="margin-left:8px">需 provider=cosyvoice</span></h3>
+        <div style="font-size:13px;margin-bottom:10px;color:var(--muted)">
+          当前音色：<b id="voice-current-id" style="color:var(--text);font-family:monospace;word-break:break-all">—</b>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="voice-audio-url" type="text" placeholder="参考音频公网 URL（如 OSS 链接，≤30s 干净人声）"
+                 style="flex:1;min-width:280px;padding:7px 9px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text)" />
+          <button id="voice-clone-btn" class="btn primary">克隆音色</button>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-bottom:10px">
+          克隆完成后 voice_id 自动设为当前音色并保存（下次合成直接复用，无需每次重新克隆）。
+          参考音频须为公网可访问的 http(s) URL（DashScope 需拉取音频文件）。
+        </div>
+        <div id="voice-clone-status" style="font-size:12.5px;min-height:16px;margin-bottom:8px"></div>
+        <h4 style="margin:0 0 6px;font-size:13px;color:var(--muted)">已保存音色</h4>
+        <div id="voice-list"><div style="color:var(--muted);font-size:12px">加载中…</div></div>
+      </div>
+    </section>
+
+    <!-- ============ ③ 日志页（P1 占位） ============ -->
+    <section id="page-logs" class="page">
+      <h2>日志</h2>
+      <div class="panel" style="color:var(--muted)">日志查看页为 P1 需求（W-08），本期未实现。接口 /api/logs 已预留。</div>
+    </section>
+
+    <!-- ============ ④ 记忆页（标准版长期记忆） ============ -->
+    <section id="page-memory" class="page">
+      <div class="toolbar">
+        <h2 style="margin:0">长期记忆</h2>
+        <span style="flex:1"></span>
+        <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px">
+          <input type="checkbox" id="mem-enabled" /> 启用记忆
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px"
+               title="对话后自动提取长期事实（消耗少量 LLM token）">
+          <input type="checkbox" id="mem-auto-extract" /> 自动提取
+        </label>
+        <button id="mem-refresh" class="btn">刷新</button>
+      </div>
+      <div class="panel">
+        <h3>新增记忆</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="mem-new-content" type="text"
+                 placeholder="输入要记住的内容，如：玩家喜欢安静的音乐"
+                 style="flex:1;min-width:280px;padding:7px 9px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text)" />
+          <select id="mem-new-kind" style="padding:7px 9px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text)">
+            <option value="fact">事实</option>
+            <option value="preference">喜好</option>
+            <option value="note">备注</option>
+          </select>
+          <button id="mem-add" class="btn primary">添加</button>
+        </div>
+        <div style="color:var(--muted);font-size:12px;margin-top:8px">
+          对话中会自动提取值得记住的事实；也可手动新增/编辑/删除。「启用记忆」「自动提取」保存后即时生效（热重载）。
+        </div>
+      </div>
+      <div class="panel">
+        <h3>记忆列表（<span id="mem-count">0</span> / <span id="mem-max">—</span>）</h3>
+        <div id="mem-list"><div style="color:var(--muted)">加载中…</div></div>
+      </div>
+      <div id="mem-feedback" style="font-size:13px;min-height:18px"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+// ===========================================================================
+// 状态页：SSE 实时展示（W-03）
+// ===========================================================================
+const $ = (id) => document.getElementById(id);
+const stateEls = {
+  state: $("state"), stateDot: $("state-dot"), uptime: $("uptime"),
+  utterance: $("utterance"), reply: $("reply"), actions: $("actions"),
+  latency: $("latency"), usage: $("usage"), timeline: $("timeline"),
+};
+
+// ===========================================================================
+// 控制区（任务 2：B2 前端操控；需求 1：新增重启）
+// ---------------------------------------------------------------------------
+// 轮询 GET /api/control/status 展示 运行/暂停/急停 + uptime；按钮调
+// POST /api/control/{emergency_stop,pause,resume,restart,shutdown}；操作后反馈。
+// 紧急停止 / 重启 / 关闭 需二次确认；暂停 ↔ 恢复为同一按钮切换。
+// ===========================================================================
+let CTRL = { running: false, paused: false, emergency_stopped: false, state: "IDLE", uptime_s: 0, processed_count: 0 };
+let CTRL_UPTIME_BASE = 0;   // 上次轮询记录的 uptime_s（本地递增显示）
+let CTRL_UPTIME_AT = 0;     // 上次轮询时刻
+
+function ctrlStateText(c) {
+  if (c.emergency_stopped) return "紧急停止";
+  if (c.paused) return "已暂停";
+  if (c.running) return "运行中";
+  return "未运行";
+}
+
+function renderControl() {
+  const chip = $("ctrl-state");
+  const txt = ctrlStateText(CTRL);
+  chip.textContent = "● " + txt;
+  chip.className = "tag " + (CTRL.emergency_stopped ? "restart" : (CTRL.paused ? "restart" : "hot"));
+  const isPaused = !!CTRL.paused;
+  $("btn-pause").style.display = isPaused ? "none" : "";
+  $("btn-resume").style.display = isPaused ? "" : "none";
+  // 需求 1：status 带 restartable 标识——不支持重启时隐藏「重启」按钮
+  $("btn-ctrl-restart").style.display = CTRL.restartable === false ? "none" : "";
+  // uptime 本地平滑递增：轮询间隔内不回跳
+  const now = Date.now() / 1000;
+  if (CTRL.running && CTRL_UPTIME_AT > 0 && CTRL.uptime_s >= CTRL_UPTIME_BASE - 1) {
+    CTRL.uptime_s = CTRL_UPTIME_BASE + (now - CTRL_UPTIME_AT);
+  }
+  CTRL_UPTIME_BASE = CTRL.uptime_s;
+  CTRL_UPTIME_AT = now;
+  $("ctrl-uptime").textContent = "运行时长 " + fmtUptime(CTRL.uptime_s) + (CTRL.processed_count ? " · 处理 " + CTRL.processed_count + " 次" : "");
+}
+
+async function refreshControl() {
+  try {
+    const resp = await fetch("/api/control/status");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    if (data && typeof data === "object" && "running" in data) {
+      CTRL = data;
+      renderControl();
+    }
+  } catch (e) {
+    // 未接线/未启动：保留上次状态，不打扰
+  }
+}
+
+function ctrlFeedback(msg, cls) {
+  const fb = $("ctrl-feedback");
+  fb.textContent = msg;
+  fb.className = cls || "";
+  if (cls) setTimeout(() => { if (fb.textContent === msg) fb.textContent = ""; }, 4000);
+}
+
+async function postControl(action) {
+  const fb = $("ctrl-feedback");
+  fb.textContent = "操作中…"; fb.className = "";
+  try {
+    const resp = await fetch("/api/control/" + action, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      const detail = data.detail || data.error || "操作失败";
+      ctrlFeedback("❌ " + detail, "err");
+      return false;
+    }
+    const msgs = {
+      emergency_stop: "🛑 已发送紧急停止：静音输出 + 复位动作",
+      pause: "⏸ 已暂停监听（忽略语音触发）",
+      resume: "▶ 已恢复监听",
+      restart: "🔄 已请求重启：优雅关闭后自动拉起新进程（重新加载配置）",
+      shutdown: "⏻ 已请求优雅关闭 Agent",
+    };
+    ctrlFeedback(msgs[action] || "✅ 操作成功", "ok");
+    return true;
+  } catch (e) {
+    ctrlFeedback("❌ 网络错误：" + e.message, "err");
+    return false;
+  }
+}
+
+function bindControlButtons() {
+  const doEmergency = async () => {
+    if (!confirm("确定要紧急停止吗？将立即静音输出并复位所有动作。")) return;
+    await postControl("emergency_stop");
+    setTimeout(refreshControl, 400);
+  };
+  $("btn-emergency").addEventListener("click", doEmergency);
+  $("btn-ctrl-emergency").addEventListener("click", doEmergency);
+  $("btn-pause").addEventListener("click", async () => {
+    if (await postControl("pause")) setTimeout(refreshControl, 200);
+  });
+  $("btn-resume").addEventListener("click", async () => {
+    if (await postControl("resume")) setTimeout(refreshControl, 200);
+  });
+  $("btn-ctrl-shutdown").addEventListener("click", async () => {
+    if (!confirm("确定要关闭 Agent 吗？主循环将优雅退出（Web 控制台随后停止）。")) return;
+    if (await postControl("shutdown")) {
+      setTimeout(refreshControl, 600);
+    }
+  });
+  // 需求 1：进程级重启（优雅关闭后拉起新进程，重新加载配置）
+  $("btn-ctrl-restart").addEventListener("click", async () => {
+    if (!confirm("确定要重启 Agent 吗？将优雅关闭并自动拉起新进程（重新加载配置）。")) return;
+    if (await postControl("restart")) {
+      setTimeout(refreshControl, 600);
+    }
+  });
+  // 轮询控制状态（2s）：暂停/恢复/急停由 Web 或外部触发后页面都能跟上
+  setInterval(refreshControl, 2000);
+}
+
+// ===========================================================================
+// 中文字段标签映射（UI 全中文化）
+// ---------------------------------------------------------------------------
+// 配置表单由 schema 驱动，字段名即 config.yaml 的英文 key。这里维护一张
+// 「dotted path / key → 中文名」映射表：渲染节标题与字段标签时优先取中文，
+// 英文 key 仍以 path 小字展示辅助定位；未收录字段回退英文 key。
+// 纯前端映射，后端零改动，不影响保存/校验/SSE 数据流。
+// ===========================================================================
+const FIELD_LABELS = {
+  // ---- 顶层节 ----
+  asr: "语音识别",
+  audio: "音频",
+  brain: "大脑",
+  speech: "语音输出",
+  action: "动作控制",
+  vision: "视觉感知",
+  agent: "编排主循环",
+  dashboard: "状态面板",
+  emergency: "紧急停止",
+  logging: "日志",
+  web: "Web 控制台",
+  // ---- 二级节 ----
+  "audio.input": "音频输入",
+  "audio.output": "音频输出",
+  "brain.llm": "大模型（LLM）",
+  "brain.persona": "角色人设",
+  "brain.context": "上下文",
+  "speech.tts": "语音合成（TTS）",
+  "speech.output": "语音输出设备",
+  "action.mapping": "动作映射",
+  "action.bridge": "动作桥接",
+  "vision.sensor": "画面采集",
+  "vision.sampling": "采样设置",
+  "agent.loop": "主循环",
+  "agent.interrupt": "打断控制",
+  "agent.degradation": "降级策略",
+  // ---- asr ----
+  "asr.model_size": "模型大小",
+  "asr.device": "计算设备",
+  "asr.compute_type": "精度类型",
+  "asr.language": "识别语言",
+  "asr.vad_mode": "语音检测灵敏度",
+  "asr.min_speech_ms": "最短语音毫秒",
+  "asr.silence_ms": "静音判定毫秒",
+  "asr.max_segment_s": "最长语音段秒",
+  // ---- audio ----
+  "audio.input.device": "输入设备",
+  "audio.input.sample_rate": "采样率",
+  "audio.input.chunk_ms": "音频块毫秒",
+  "audio.input.silence_threshold": "静音预筛阈值",
+  "audio.input.filter_enabled": "误识别过滤开关",
+  "audio.input.filter_blocklist": "屏蔽词（子串）",
+  "audio.input.filter_exact_words": "屏蔽词（精确）",
+  "audio.input.filter_min_length": "最短保留长度",
+  "audio.output.device": "输出设备",
+  "audio.output.sample_rate": "采样率",
+  // ---- brain ----
+  "brain.llm.provider": "供应商",
+  "brain.llm.base_url": "接口地址",
+  "brain.llm.api_key_env": "密钥环境变量",
+  "brain.llm.api_key": "API 密钥",
+  "brain.llm.model": "模型名",
+  "brain.llm.temperature": "温度",
+  "brain.llm.max_tokens": "最大令牌数",
+  "brain.llm.timeout": "超时秒",
+  "brain.llm.vision_enabled": "视觉理解",
+  "brain.persona.name": "角色名",
+  "brain.persona.system_prompt": "人设提示词",
+  "brain.context.max_turns": "上下文轮数",
+  "brain.memory": "长期记忆",
+  "brain.memory.enabled": "启用记忆",
+  "brain.memory.db_path": "记忆库路径",
+  "brain.memory.max_items": "记忆条数上限",
+  "brain.memory.inject_limit": "每次注入条数",
+  "brain.memory.auto_extract": "自动提取",
+  "brain.memory.extract_interval": "提取间隔（轮）",
+  "brain.memory.extract_max_items": "每次提取最多条数",
+  // ---- speech ----
+  "speech.tts.provider": "合成引擎",
+  "speech.tts.api_key_env": "密钥环境变量",
+  "speech.tts.api_key": "API 密钥",
+  "speech.tts.voice": "音色（云端）",
+  "speech.tts.edge_voice": "音色（Edge）",
+  "speech.tts.rate": "语速",
+  "speech.tts.volume": "音量",
+  "speech.tts.timeout": "超时秒",
+  "speech.tts.emotion_voice": "情感音色映射",
+  "speech.tts.tts_clone.base_url": "克隆服务地址",
+  "speech.tts.tts_clone.method": "请求方式",
+  "speech.tts.tts_clone.ref_audio_path": "克隆参考音频",
+  "speech.tts.tts_clone.ref_text": "参考文本",
+  "speech.tts.tts_clone.lang": "克隆语言",
+  "speech.tts.tts_clone.timeout": "超时秒",
+  "speech.tts.tts_mimo": "MiMo 克隆 TTS",
+  "speech.tts.tts_mimo.base_url": "MiMo 服务地址",
+  "speech.tts.tts_mimo.api_key_env": "密钥环境变量",
+  "speech.tts.tts_mimo.api_key": "API 密钥",
+  "speech.tts.tts_mimo.model": "模型名",
+  "speech.tts.tts_mimo.ref_audio_path": "克隆参考音频路径",
+  "speech.tts.tts_mimo.timeout": "超时秒",
+  "speech.tts.tts_cosyvoice": "CosyVoice（阿里云）",
+  "speech.tts.tts_cosyvoice.api_key_env": "密钥环境变量",
+  "speech.tts.tts_cosyvoice.api_key": "API 密钥",
+  "speech.tts.tts_cosyvoice.model": "模型名",
+  "speech.tts.tts_cosyvoice.voice_id": "克隆音色 ID",
+  "speech.tts.tts_cosyvoice.timeout": "超时秒",
+  "speech.output.device": "输出设备",
+  "speech.output.sample_rate": "采样率",
+  // ---- action ----
+  "action.mapping.path": "映射表路径",
+  "action.bridge.command": "命令",
+  "action.bridge.args": "参数",
+  "action.bridge.timeout": "超时秒",
+  // ---- vision ----
+  "vision.sensor.backend": "采集方式",
+  "vision.sensor.obs_host": "OBS 主机",
+  "vision.sensor.obs_port": "OBS 端口",
+  "vision.sensor.obs_password": "OBS 密码",
+  "vision.sensor.source_name": "截图源",
+  "vision.sensor.camera_device": "摄像头设备号",
+  "vision.sensor.window_title_keyword": "窗口标题关键词",
+  "vision.sampling.fps": "采样频率",
+  "vision.sampling.max_size": "最大尺寸",
+  "vision.sampling.jpeg_quality": "图片质量",
+  "vision.sampling.event_trigger": "事件触发",
+  "vision.sampling.change_threshold": "变化阈值",
+  // ---- agent ----
+  "agent.loop.think_timeout": "思考超时",
+  "agent.loop.tts_timeout": "合成超时",
+  "agent.loop.action_timeout": "动作超时",
+  "agent.loop.latency_budget_s": "延迟预算秒",
+  "agent.interrupt.enabled": "允许打断",
+  "agent.degradation.message": "降级提示语",
+  "agent.degradation.beep": "降级提示音",
+  // ---- dashboard ----
+  "dashboard.enabled": "启用",
+  "dashboard.terminal": "终端面板",
+  "dashboard.refresh_ms": "刷新毫秒",
+  "dashboard.obs_overlay": "OBS 叠加",
+  // ---- emergency ----
+  "emergency.hotkey": "急停快捷键",
+  "emergency.flag_file": "信号文件",
+  // ---- logging ----
+  "logging.level": "日志级别",
+  "logging.file": "日志文件",
+  // ---- web ----
+  "web.enabled": "启用",
+  "web.host": "监听地址",
+  "web.port": "端口",
+  "web.auto_open_browser": "自动打开浏览器",
+  // ---- 通用 key 兜底（未来新增字段未收录时也能显示中文）----
+  enabled: "启用", device: "设备", sample_rate: "采样率", timeout: "超时秒",
+  provider: "供应商", api_key: "API 密钥", api_key_env: "密钥环境变量",
+  model: "模型名", name: "名称", path: "路径", command: "命令", args: "参数",
+  message: "提示语", beep: "提示音", level: "级别", file: "文件", host: "监听地址",
+  port: "端口", voice: "音色", edge_voice: "音色（Edge）", rate: "语速", volume: "音量",
+  ref_audio_path: "克隆参考音频", ref_text: "参考文本", base_url: "服务地址",
+  lang: "语言",
+};
+
+// provider 枚举下拉选项文案（cloud/edge/clone/mimo 等），无映射时回退原值
+const PROVIDER_LABELS = {
+  "cloud": "cloud（云端 OpenAI 兼容）",
+  "edge": "edge（Edge 本地免费）",
+  "clone": "clone（克隆语音 · 本地模型）",
+  "mimo": "mimo（MiMo 克隆语音 · 云）",
+  "cosyvoice": "cosyvoice（CosyVoice · 阿里云克隆）",
+  "openai": "openai",
+  "ollama": "ollama（本地）",
+  "vllm": "vllm（本地）",
+};
+
+// 状态机英文值 → 中文展示（状态卡片 + 时间线）
+const STATE_LABELS = {
+  IDLE: "空闲", LISTENING: "聆听中", THINKING: "思考中",
+  SPEAKING: "说话中", ACTION: "执行动作", EMERGENCY_STOP: "紧急停止",
+};
+
+// 事件类型 → 中文展示（时间线类型列）
+const EVENT_LABELS = {
+  state_changed: "状态变化", utterance_ready: "语音识别", decision_ready: "决策完成",
+  action_executed: "动作执行", tts_started: "TTS 开始", tts_finished: "TTS 结束",
+  emergency_stop: "紧急停止", pipeline_state: "流水线状态",
+};
+
+const PHASE_LABELS = {
+  asr_done: "ASR完成", llm_running: "LLM中", llm_done: "LLM完成",
+  tts_running: "TTS中", tts_done: "TTS完成", queued: "排队中",
+  speaking: "播放中", done: "已完成", cancelled: "已取消",
+};
+
+function fieldLabel(key, path) {
+  if (path && FIELD_LABELS[path]) return FIELD_LABELS[path];
+  if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+  return key; // 未知字段回退英文 key
+}
+
+function stateLabel(s) {
+  return STATE_LABELS[s] || s || "空闲";
+}
+
+function eventLabel(t) {
+  return EVENT_LABELS[t] || t;
+}
+
+const STATE_COLORS = {
+  IDLE: "dot-IDLE", LISTENING: "dot-LISTENING", THINKING: "dot-THINKING",
+  SPEAKING: "dot-SPEAKING", ACTION: "dot-ACTION", EMERGENCY_STOP: "dot-EMERGENCY_STOP",
+};
+
+function fmtUptime(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = String(Math.floor(s / 3600)).padStart(2, "0");
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const sec = String(s % 60).padStart(2, "0");
+  return `${h}:${m}:${sec}`;
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toTimeString().slice(0, 8);
+}
+
+function renderTimeline(list) {
+  const box = stateEls.timeline;
+  box.innerHTML = "";
+  if (!list || list.length === 0) {
+    box.innerHTML = '<div class="tl-row">等待事件…</div>';
+    return;
+  }
+  for (const item of list.slice(-50).reverse()) {
+    const row = document.createElement("div");
+    row.className = "tl-row";
+    const t = document.createElement("span"); t.className = "tl-time"; t.textContent = fmtTime(item.ts);
+    const ty = document.createElement("span"); ty.className = "tl-type"; ty.textContent = eventLabel(item.type);
+    let brief = "";
+    const p = item.payload || {};
+    if (item.type === "state_changed") brief = `${stateLabel(p.from)} → ${stateLabel(p.to)}`;
+    else if (item.type === "utterance_ready") brief = String(p.text || "");
+    else if (item.type === "decision_ready") brief = `respond=${p.respond !== false} ${p.emotion ? "emotion=" + p.emotion : ""}`;
+    else if (item.type === "action_executed") { const n = (p.params && p.params.name) || ""; brief = `${p.kind || ""}:${n}`; }
+    else if (item.type === "tts_started") brief = "TTS 开始";
+    else if (item.type === "tts_finished") brief = "TTS 结束";
+    else if (item.type === "emergency_stop") brief = `source=${p.source || "?"}`;
+    row.append(t, ty, document.createTextNode(brief));
+    box.appendChild(row);
+  }
+}
+
+function applySnapshot(snap) {
+  if (!snap) return;
+  stateEls.state.textContent = stateLabel(snap.state);
+  stateEls.stateDot.className = "state-dot " + (STATE_COLORS[snap.state] || "dot-IDLE");
+  stateEls.utterance.textContent = snap.utterance || "—";
+  stateEls.reply.textContent = snap.reply || "—";
+  stateEls.actions.textContent = (snap.actions && snap.actions.length) ? snap.actions.join(" · ") : "—";
+  stateEls.latency.textContent = (snap.latency_s || 0).toFixed(1) + "s";
+  stateEls.uptime.textContent = fmtUptime(snap.uptime_s);
+  const u = snap.usage || {};
+  stateEls.usage.innerHTML = `LLM 调用 <b>${u.llm_calls || 0}</b> 次 · TTS 调用 <b>${u.tts_calls || 0}</b> 次 · 预估成本 ≈ <b>¥${(u.cost || 0).toFixed(4)}</b>`;
+  renderTimeline(snap.timeline);
+}
+
+function onLiveEvent(evt) {
+  // 单事件增量更新 + 追加时间线
+  const p = evt.data || {};
+  if (evt.type === "state_changed") {
+    if (p.to) { stateEls.state.textContent = stateLabel(p.to); stateEls.stateDot.className = "state-dot " + (STATE_COLORS[p.to] || "dot-IDLE"); }
+    if (p.latency_s != null) stateEls.latency.textContent = Number(p.latency_s).toFixed(1) + "s";
+  } else if (evt.type === "utterance_ready") {
+    stateEls.utterance.textContent = p.text || "—";
+  } else if (evt.type === "decision_ready") {
+    stateEls.reply.textContent = p.reply_text || "—";
+  } else if (evt.type === "action_executed") {
+    const name = (p.params && p.params.name) || "";
+    const s = `${p.kind || ""}:${name}`;
+    const cur = stateEls.actions.textContent === "—" ? [] : stateEls.actions.textContent.split(" · ");
+    cur.push(s);
+    stateEls.actions.textContent = cur.slice(-3).join(" · ");
+  } else if (evt.type === "pipeline_state") {
+    renderPipelineData(p);
+    return; // pipeline 事件不追加时间线
+  }
+  const box = stateEls.timeline;
+  if (box.firstChild && box.firstChild.textContent === "等待事件…") box.innerHTML = "";
+  const row = document.createElement("div");
+  row.className = "tl-row";
+  const t = document.createElement("span"); t.className = "tl-time"; t.textContent = fmtTime(Date.now() / 1000);
+  const ty = document.createElement("span"); ty.className = "tl-type"; ty.textContent = eventLabel(evt.type);
+  row.append(t, ty, document.createTextNode(JSON.stringify(p)));
+  box.prepend(row);
+  while (box.children.length > 50) box.lastChild.remove();
+}
+
+function connectSSE() {
+  const es = new EventSource("/api/stream");
+  es.onopen = () => { $("conn").textContent = "● 已连接"; $("conn").className = "conn on"; };
+  es.onerror = () => { $("conn").textContent = "● 连接中断，重连中…"; $("conn").className = "conn off"; };
+  es.addEventListener("snapshot", (e) => { try { applySnapshot(JSON.parse(e.data)); } catch (err) { console.error(err); } });
+  for (const t of ["state_changed", "utterance_ready", "decision_ready", "action_executed", "tts_started", "tts_finished", "emergency_stop", "pipeline_state"]) {
+    es.addEventListener(t, (e) => { try { onLiveEvent({ type: t, data: JSON.parse(e.data) }); } catch (err) { console.error(err); } });
+  }
+  return es;
+}
+
+// ===========================================================================
+// 流水线面板（P2-1：PIPELINE_STATE 渲染；P2-3：跳过按钮）
+// ===========================================================================
+function phaseLabel(s) { return PHASE_LABELS[s] || s || "未知"; }
+
+function renderPipelineData(payload) {
+  const panel = $("pipeline-panel");
+  if (!payload || (!payload.utterances && !payload.current_playing && !payload.queue_size)) {
+    // 空状态：如果没有任何活跃项则隐藏面板
+    if (!payload || (!payload.current_playing && (payload.queue_size || 0) === 0 && (!payload.utterances || payload.utterances.length === 0))) {
+      panel.style.display = "none";
+      return;
+    }
+  }
+  panel.style.display = "";
+
+  // 活跃 utterance 列表
+  const list = $("pipe-list");
+  const utts = payload.utterances || [];
+  if (utts.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px">暂无活跃 utterance</div>';
+  } else {
+    list.innerHTML = "";
+    for (const u of utts) {
+      if (u.state === "done" || u.state === "cancelled") continue; // 过滤终端状态
+      const row = document.createElement("div");
+      row.className = "utt-row";
+      const idSpan = document.createElement("span");
+      idSpan.className = "utt-id"; idSpan.textContent = u.id || "—";
+      const textSpan = document.createElement("span");
+      textSpan.className = "utt-text"; textSpan.textContent = u.text || "(空)";
+      const replySpan = document.createElement("span");
+      replySpan.className = "utt-text";
+      replySpan.style.cssText = "max-width:160px;color:var(--ok)";
+      replySpan.textContent = u.reply_text || "";
+      const phaseSpan = document.createElement("span");
+      phaseSpan.className = "phase-tag phase-" + (u.state || "");
+      phaseSpan.textContent = phaseLabel(u.state);
+      row.append(idSpan, textSpan, replySpan, phaseSpan);
+      list.appendChild(row);
+    }
+  }
+
+  // 输出队列大小
+  $("pipe-queue-size").textContent = payload.queue_size || 0;
+
+  // 当前播放进度
+  const playingRow = $("pipe-playing");
+  const cp = payload.current_playing;
+  if (cp && cp.remaining_s != null) {
+    playingRow.style.display = "";
+    $("pipe-playing-text").textContent = cp.reply_text || cp.id || "—";
+    $("pipe-playing-remaining").textContent = (cp.remaining_s || 0).toFixed(1) + "s";
+  } else {
+    playingRow.style.display = "none";
+  }
+
+  // 跳过按钮：有排队中 utterance 或正在播放时可用
+  const hasQueued = (payload.queue_size || 0) > 0;
+  const hasPlaying = !!payload.current_playing;
+  $("btn-skip").disabled = !(hasQueued || hasPlaying);
+  $("pipe-queue-badge").textContent = hasPlaying ? "" : (hasQueued ? `(${payload.queue_size} 条排队)` : "");
+}
+
+// P2-3：跳过当前播放
+$("btn-skip").addEventListener("click", async () => {
+  $("btn-skip").disabled = true;
+  try {
+    const resp = await fetch("/api/control/skip", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      console.warn("skip 失败:", data.detail || data);
+    }
+  } catch (e) {
+    console.warn("skip 网络错误:", e.message);
+  }
+  // 按钮由下次 PIPELINE_STATE 事件重新启用
+  setTimeout(() => {}, 100);
+});
+
+// ===========================================================================
+// 参数页：schema 驱动表单（W-04）
+// ===========================================================================
+let CONFIG_SCHEMA = null;   // { schema, hot_reload, restart_required, sensitive, title }
+let CONFIG_VALUES = null;   // 当前已保存配置（掩码后）
+let formEls = [];           // [{path, el, type}]
+
+function resolveRef(raw, schema) {
+  if (raw && raw.$ref) {
+    const key = raw.$ref.replace("#/$defs/", "");
+    return schema.$defs[key] || raw;
+  }
+  return raw;
+}
+
+function isRestart(path) {
+  return CONFIG_SCHEMA && CONFIG_SCHEMA.restart_required.includes(path);
+}
+
+function isSensitive(path) {
+  return CONFIG_SCHEMA && CONFIG_SCHEMA.sensitive.includes(path);
+}
+
+// ===========================================================================
+// 音频设备下拉框（x-widget=audio-device-select）
+// 选项来自 GET /api/audio/devices（{input:[...], output:[...]}）；枚举失败或
+// 列表为空时保留"默认设备"+当前值选项（等效回退编辑框），不阻塞表单。
+// ===========================================================================
+let AUDIO_DEVICES = null;            // {input:[...], output:[...]}（缓存）
+let AUDIO_DEVICES_PROMISE = null;    // 共享 pending promise：buildForm 同步渲染 3 个设备
+                                     // 字段时只 fetch 一次，所有下拉框挂在同一 promise 上，
+                                     // 完成后各自 then 都会执行填充（避免只首个有选项的竞态）
+
+function loadAudioDevices() {
+  if (!AUDIO_DEVICES_PROMISE) {
+    AUDIO_DEVICES_PROMISE = (async () => {
+      try {
+        const resp = await fetch("/api/audio/devices");
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        AUDIO_DEVICES = await resp.json();
+      } catch (e) {
+        console.warn("音频设备枚举失败，回退编辑框:", e);
+        AUDIO_DEVICES = null;
+      }
+    })();
+  }
+  return AUDIO_DEVICES_PROMISE;
+}
+
+function renderDeviceSelect(path, kind, currentValue) {
+  const select = document.createElement("select");
+  const cur = currentValue == null ? "" : String(currentValue);
+  const kindList = () => (AUDIO_DEVICES && Array.isArray(AUDIO_DEVICES[kind])) ? AUDIO_DEVICES[kind] : [];
+
+  function isLoopback(d) { return !!(d && (d.loopback === true || d.kind === "loopback")); }
+  function isIndex(v) { return /^\d+$/.test(String(v)); }
+
+  // P0 修复：普通麦克风 value 用 index（数字，sounddevice 设备索引）而非设备名——
+  // 同名设备在多个 hostapi 下重名（DirectSound/WASAPI/WDM-KS）时按名字模糊匹配会崩。
+  // loopback（[内录]）条目保持 name 作为 value：运行时靠 [内录] 后缀识别回环，
+  // 用 pyaudiowpatch 按 [Loopback] 变体名匹配打开（不受重名崩溃影响）。
+  // 需求 2：不支持 16k 的普通设备（WASAPI/WDM-KS，supports_16k=false）不进可选
+  // 分组（屏蔽）；仅当它是已保存值时以"禁用警告项"展示，提示用户为何不可选。
+  // 返回应设置的选中值：旧配置（设备名）自动换算成对应 index 选中。
+  function buildOptions(target, keepValue) {
+    target.appendChild(option("", "（默认设备）"));
+    const mics = [], loops = [], non16k = [];
+    const rawToIndex = {};   // raw_name → index（兼容旧配置：存的设备名；不含 loopback）
+    for (const d of kindList()) {
+      if (!d || !d.name) continue;
+      const raw = d.raw_name || d.name;
+      // loopback 条目不纳入 rawToIndex：它靠 [内录] 后缀识别回环，若换算成
+      // pyaudiowpatch 的 index，保存后丢 [内录] 后缀 → 运行时按普通麦克风打开
+      // 错误设备（与后端 _disambiguate_names 不处理 loopback 保持一致）
+      if (!isLoopback(d) && rawToIndex[raw] == null) rawToIndex[raw] = d.index;
+      if (isLoopback(d)) { loops.push(d); continue; }
+      if (d.supports_16k === false) { non16k.push(d); continue; } // 屏蔽不支持 16k 的
+      mics.push(d);
+    }
+    const is16kDisabled = (idx) => non16k.some((d) => String(d.index) === String(idx));
+    // 输入设备分组：麦克风 / 电脑内录（WASAPI 回环，问题 2）
+    const appendGroup = (label, list) => {
+      if (!list.length) return;
+      const g = document.createElement("optgroup");
+      g.label = label;
+      for (const d of list) {
+        // 麦克风 value=index（P0 重名修复）；回环 value=name（[内录] 后缀，运行时识别回环）
+        // 选项文案附采样率 + hostapi，便于用户识别 7.1ch/48k 等设备（需求 2）
+        const extra = (d.samplerate ? "（" + d.samplerate + "Hz" : "（默认采样率未知")
+          + (d.hostapi ? " · " + d.hostapi : "") + "）";
+        g.appendChild(option(isLoopback(d) ? d.name : d.index, d.name + extra));
+      }
+      target.appendChild(g);
+    };
+    appendGroup("麦克风", mics);
+    appendGroup("电脑内录（回环）", loops);
+    // 已保存值不在可选分组中时也保留，避免切换/保存丢配置；
+    // 若已保存值实测不支持 16k → 以禁用警告项展示（屏蔽但可见原因）
+    let selectValue = keepValue;
+    // 禁用警告项：value 用设备 index（与 selectValue 一致，保证能回显），
+    // 文案提示"不支持 16k 已屏蔽"，用户看到原因但无法选中该设备。
+    const disabledWarn = (label, val) => {
+      const o = document.createElement("option");
+      o.value = val != null ? val : keepValue;
+      o.textContent = label;
+      o.disabled = true;
+      o.title = "该设备实测不支持 16k（WASAPI/WDM-KS 只认 48k），请选择支持 16k 的设备（MME/DirectSound）";
+      target.appendChild(o);
+    };
+    if (keepValue && !isIndex(keepValue)) {
+      // 旧配置存的设备名 → 找到同名设备用其 index 选中（前端自动迁移到新契约）
+      const idx = rawToIndex[keepValue];
+      if (idx != null) {
+        selectValue = String(idx);
+        if (is16kDisabled(idx)) {
+          disabledWarn(keepValue + "（⚠ 不支持 16k，已屏蔽）", idx);
+        } else {
+          target.appendChild(option(idx, keepValue));
+        }
+      } else {
+        target.appendChild(option(keepValue, keepValue)); // 找不到也保留原值
+      }
+    } else if (keepValue && isIndex(keepValue)) {
+      if (!kindList().some((d) => String(d.index) === keepValue)) {
+        target.appendChild(option(keepValue, "设备 index " + keepValue)); // 设备未枚举时保留
+      } else if (is16kDisabled(keepValue)) {
+        disabledWarn("设备 index " + keepValue + "（⚠ 不支持 16k，已屏蔽）");
+      }
+    }
+    return selectValue;
+  }
+
+  function option(value, text) {
+    const o = document.createElement("option");
+    o.value = value; o.textContent = text;
+    return o;
+  }
+
+  const val = buildOptions(select, cur);
+  select.value = val;
+  select.dataset.deviceSelect = "1";
+  select.dataset.deviceKind = kind;
+
+  if (!AUDIO_DEVICES) {
+    // 设备列表尚未加载（首次渲染/上次失败）：挂在共享 promise 上，
+    // fetch 完成后填充本下拉框；失败时保持默认+当前值选项（等效回退编辑框）
+    loadAudioDevices().then(() => {
+      const keep = select.value;
+      select.innerHTML = "";
+      const v = buildOptions(select, keep);
+      select.value = v;
+    }).catch(() => {});
+  }
+  return select;
+}
+
+// ===========================================================================
+// 枚举字段下拉框（schema SELECT_OPTIONS 驱动）
+// 命中 /api/config/schema 的 select_options[path] 时渲染 <select>：
+// - 默认选中 config.yaml 当前已保存值（不做成每次都选第一项）；
+// - 已保存值不在枚举列表内（如自定义语言）也保留为 option，保存/热重载后
+//   能识别回原值，不会丢配置；
+// - 选项末尾附「+ 自定义…」，选中后可手动输入列表外的合法值（如语言代码）。
+// 未命中 SELECT_OPTIONS 的字段保持原渲染行为（text/number/checkbox 等）。
+// ===========================================================================
+const CUSTOM_OPTION_VALUE = "__custom__";
+
+function selectOptionsFor(path) {
+  return (CONFIG_SCHEMA && CONFIG_SCHEMA.select_options && CONFIG_SCHEMA.select_options[path]) || null;
+}
+
+function renderEnumSelect(path, options) {
+  const el = document.createElement("select");
+  el.dataset.selectOptions = "1";
+  const cur = getValue(path);
+  const curStr = cur == null ? "" : String(cur);
+  const isProvider = /\.provider$/.test(path);
+  const opts = Array.isArray(options) ? options.slice() : [];
+  // 已保存值不在枚举内 → 保留为 option（自定义值/未来新增值的回显兜底）
+  if (curStr !== "" && !opts.some((o) => String(o) === curStr)) {
+    opts.push(curStr);
+  }
+  for (const opt of opts) {
+    const s = String(opt);
+    const o = document.createElement("option");
+    o.value = s;
+    o.textContent = (isProvider && PROVIDER_LABELS[s]) ? PROVIDER_LABELS[s] : s;
+    el.appendChild(o);
+  }
+  const custom = document.createElement("option");
+  custom.value = CUSTOM_OPTION_VALUE;
+  custom.textContent = "+ 自定义（手动输入）…";
+  el.appendChild(custom);
+  el.value = curStr;
+  el.addEventListener("change", () => {
+    if (el.value !== CUSTOM_OPTION_VALUE) return;
+    const input = prompt(`为 ${path} 输入自定义值：`, curStr);
+    if (input == null || input.trim() === "") { el.value = curStr; return; }
+    const val = input.trim();
+    for (const o of el.options) {
+      if (String(o.value) === val) { el.value = val; return; }
+    }
+    const o = document.createElement("option");
+    o.value = val; o.textContent = val;
+    el.insertBefore(o, custom);
+    el.value = val;
+  });
+  return el;
+}
+
+function renderField(key, propSchema, path, container) {
+  const label = fieldLabel(key, path);
+  const restart = isRestart(path);
+  const sensitive = isSensitive(path);
+  const row = document.createElement("div");
+  row.className = "field";
+
+  const lab = document.createElement("label");
+  lab.htmlFor = "f-" + path.replace(/\./g, "_");
+  lab.appendChild(document.createTextNode(label));
+  const pth = document.createElement("span");
+  pth.className = "path";
+  pth.textContent = path;
+  lab.appendChild(pth);
+  row.appendChild(lab);
+
+  const wrap = document.createElement("div");
+  const type = propSchema.type;
+  let el;
+  const isLongText = /prompt|message|system_prompt/i.test(key) || (typeof propSchema.title === "string" && propSchema.title.length > 40);
+
+  const selectOptions = selectOptionsFor(path);
+  if (selectOptions) {
+    // 枚举字段（SELECT_OPTIONS）：渲染 <select><option>，优先于 text/number
+    el = renderEnumSelect(path, selectOptions);
+  } else if (type === "boolean") {
+    el = document.createElement("input");
+    el.type = "checkbox";
+    el.checked = !!getValue(path);
+  } else if (type === "integer" || type === "number") {
+    el = document.createElement("input");
+    el.type = "number";
+    el.step = type === "integer" ? "1" : "any";
+    if (propSchema.minimum != null) el.min = propSchema.minimum;
+    if (propSchema.maximum != null) el.max = propSchema.maximum;
+    const v = getValue(path);
+    el.value = v == null ? "" : v;
+  } else if (type === "string" && Array.isArray(propSchema.enum)) {
+    el = document.createElement("select");
+    const isProvider = /\.provider$/.test(path);
+    for (const opt of propSchema.enum) {
+      const o = document.createElement("option");
+      o.value = opt;
+      // provider 枚举显示中文文案（如 clone → 克隆语音 · 本地模型）
+      o.textContent = (isProvider && PROVIDER_LABELS[opt]) ? PROVIDER_LABELS[opt] : opt;
+      el.appendChild(o);
+    }
+    el.value = getValue(path) ?? "";
+  } else if (type === "string" && propSchema["x-widget"] === "audio-device-select") {
+    // 系统音频设备下拉框：选项来自 /api/audio/devices（按 input/output 过滤）
+    el = renderDeviceSelect(path, propSchema["x-device-kind"] || "output", getValue(path) ?? "");
+  } else if (type === "string" && isLongText) {
+    el = document.createElement("textarea");
+    el.value = getValue(path) ?? "";
+  } else if (type === "array" || (type === "object" && !propSchema.properties)) {
+    // 数组/字典对象 → JSON 文本域
+    el = document.createElement("textarea");
+    const v = getValue(path);
+    el.value = v == null ? "" : JSON.stringify(v, null, 0);
+    el.dataset.json = "1";
+  } else if (type === "object" && propSchema.properties) {
+    // 不应走到这里（对象会进 renderSection）
+    return;
+  } else {
+    el = document.createElement("input");
+    el.type = sensitive ? "password" : "text";
+    el.value = getValue(path) ?? "";
+  }
+  el.id = "f-" + path.replace(/\./g, "_");
+  if (sensitive && /api_key/.test(path)) {
+    el.disabled = true; // API keys 由 .env 管理（P1 W-07 支持编辑）
+    el.title = "API Key 由 .env 环境变量管理；保存时忽略该字段，修改需编辑 .env 并重启进程";
+  }
+  el.dataset.path = path;
+  wrap.appendChild(el);
+
+  // 需求 2：输出设备 16k 兼容提示——实测 supports_16k=false（WASAPI/WDM-KS 只认
+  // 48k）时提示；MME/DirectSound 支持 16k 不触发；列表为空/未枚举时不打扰。
+  if (propSchema["x-device-kind"] === "output") {
+    const hint = document.createElement("div");
+    hint.className = "device-hint";
+    hint.style.cssText = "font-size:11.5px;color:var(--warn);margin-top:5px;display:none;line-height:1.4";
+    wrap.appendChild(hint);
+    const updateHint = () => {
+      const devs = (AUDIO_DEVICES && Array.isArray(AUDIO_DEVICES.output)) ? AUDIO_DEVICES.output : [];
+      const dev = devs.find((d) => String(d.index) === String(el.value));
+      let msg = "";
+      if (dev) {
+        const sr = Number(dev.samplerate || 0);
+        const ha = String(dev.hostapi || "");
+        if (dev.supports_16k === false) {
+          msg = "⚠ 该设备实测不支持 16k（" + ha + "，默认 " + sr + "Hz），已在下拉框屏蔽；若仍要使用请改用支持 16k 的设备（如 7.1ch MME/DirectSound）。";
+        }
+      }
+      hint.textContent = msg;
+      hint.style.display = msg ? "block" : "none";
+    };
+    el.addEventListener("change", updateHint);
+    // 设备列表异步加载完成后补一次提示
+    loadAudioDevices().then(updateHint).catch(() => {});
+    updateHint();
+
+    // 功能需求：测试设备发声 —— 用当前下拉框选中值调 POST /api/audio/test_output
+    // 播放 440Hz 正弦波（后端不依赖 TTS 引擎/网络）；播放期间按钮 loading 防连点。
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:6px";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn";
+    btn.textContent = "🔊 测试发声";
+    btn.title = "用当前选中的输出设备播放一段 440Hz 测试音（约 1 秒），验证设备是否出声";
+    const resultSpan = document.createElement("span");
+    resultSpan.style.cssText = "font-size:12px;min-height:16px";
+    btnRow.append(btn, resultSpan);
+    wrap.appendChild(btnRow);
+
+    const showTestResult = (msg, cls) => {
+      resultSpan.textContent = msg;
+      resultSpan.style.color = cls === "err" ? "var(--danger)" : "var(--ok)";
+      if (msg) setTimeout(() => { if (resultSpan.textContent === msg) resultSpan.textContent = ""; }, 6000);
+    };
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "播放中…";
+      showTestResult("", "");
+      try {
+        const resp = await fetch("/api/audio/test_output", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device: el.value || null, duration: 1.0 }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.ok !== true) {
+          showTestResult("❌ " + (data.detail || data.error || "播放失败"), "err");
+        } else {
+          showTestResult("✅ " + (data.message || "已播放测试音"), "ok");
+        }
+      } catch (e) {
+        showTestResult("❌ 网络错误：" + e.message, "err");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "🔊 测试发声";
+      }
+    });
+  }
+
+  row.appendChild(wrap);
+
+  const tag = document.createElement("span");
+  if (sensitive) tag.className = "tag sensitive", tag.textContent = "🔒 敏感";
+  else if (restart) tag.className = "tag restart", tag.textContent = "⚠ 需重启";
+  else tag.className = "tag hot", tag.textContent = "♻ 热重载";
+  row.appendChild(tag);
+
+  container.appendChild(row);
+  formEls.push({ path, el, type });
+}
+
+function renderSection(key, propSchema, path, container) {
+  const fs = document.createElement("fieldset");
+  const legend = document.createElement("legend");
+  legend.appendChild(document.createTextNode(fieldLabel(key, path)));
+  const pth = document.createElement("span");
+  pth.className = "path";
+  pth.textContent = path;
+  legend.appendChild(pth);
+  fs.appendChild(legend);
+  const props = propSchema.properties || {};
+  for (const [k, raw] of Object.entries(props)) {
+    const childPath = path ? path + "." + k : k;
+    const childSchema = resolveRef(raw, CONFIG_SCHEMA.schema);
+    if (childSchema.properties) {
+      renderSection(k, childSchema, childPath, fs);
+    } else {
+      renderField(k, childSchema, childPath, fs);
+    }
+  }
+  container.appendChild(fs);
+}
+
+function getValue(path) {
+  let node = CONFIG_VALUES;
+  for (const part of path.split(".")) {
+    if (node == null || typeof node !== "object") return undefined;
+    node = node[part];
+  }
+  return node;
+}
+
+function buildForm() {
+  const form = $("config-form");
+  form.innerHTML = "";
+  formEls = [];
+  const schema = CONFIG_SCHEMA.schema;
+  for (const [key, raw] of Object.entries(schema.properties || {})) {
+    const childSchema = resolveRef(raw, schema);
+    if (childSchema.properties) renderSection(key, childSchema, key, form);
+    else renderField(key, childSchema, key, form);
+  }
+}
+
+function collectForm() {
+  const out = {};
+  for (const item of formEls) {
+    let val;
+    if (item.el.type === "checkbox") val = item.el.checked;
+    else if (item.el.type === "number") val = item.el.value === "" ? null : Number(item.el.value);
+    else if (item.el.dataset.selectOptions === "1" && item.type === "integer") val = item.el.value === "" ? null : Number(item.el.value);
+    else if (item.el.dataset.json === "1") {
+      try { val = item.el.value.trim() ? JSON.parse(item.el.value) : null; }
+      catch (e) { throw new Error(`字段 ${item.path} 不是合法 JSON`); }
+    }
+    else val = item.el.value;
+    const parts = item.path.split(".");
+    let node = out;
+    for (let i = 0; i < parts.length - 1; i++) {
+      node[parts[i]] = node[parts[i]] || {};
+      node = node[parts[i]];
+    }
+    node[parts[parts.length - 1]] = val;
+  }
+  return out;
+}
+
+async function loadConfig() {
+  const [schemaResp, configResp] = await Promise.all([
+    fetch("/api/config/schema"),
+    fetch("/api/config"),
+  ]);
+  if (!schemaResp.ok || !configResp.ok) throw new Error("加载配置失败");
+  CONFIG_SCHEMA = await schemaResp.json();
+  const cfgData = await configResp.json();
+  CONFIG_VALUES = cfgData.config || {};
+  buildForm();
+}
+
+async function saveConfig() {
+  const btn = $("btn-save");
+  btn.disabled = true;
+  const result = $("saveResult");
+  result.className = "";
+  result.textContent = "保存中…";
+  let payload;
+  try {
+    payload = collectForm();
+  } catch (e) {
+    result.className = "err";
+    result.textContent = "❌ " + e.message;
+    btn.disabled = false;
+    return;
+  }
+  try {
+    const resp = await fetch("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      result.className = "err";
+      const detail = Array.isArray(data.detail)
+        ? data.detail.map((d) => (d.loc || []).join(".") + ": " + d.msg).join("；")
+        : (data.detail || data.error || "保存失败");
+      result.textContent = "❌ " + detail;
+    } else {
+      // A3：优先用"本次变更的需重启字段"（restart_required_changed），
+      // 旧后端无该字段时回退完整需重启清单。
+      const changed = Array.isArray(data.restart_required_changed)
+        ? data.restart_required_changed
+        : data.restart_required || [];
+      const restart = changed.length
+        ? "。以下字段本次已变更、需重启进程生效：<b>" + changed.slice(0, 8).map((p) => FIELD_LABELS[p] || p).join("、") + (changed.length > 8 ? "…" : "") + "</b>"
+        : "";
+      result.className = data.reloaded ? "ok" : "warn";
+      result.innerHTML = (data.reloaded ? "✅ 已写入 config.yaml 并热重载生效" : "⚠ 已写入 config.yaml（未热重载）") + restart;
+      // 保存成功后重新拉取掩码配置，避免表单显示旧值
+      await loadConfig();
+    }
+  } catch (e) {
+    result.className = "err";
+    result.textContent = "❌ 网络错误：" + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ===========================================================================
+// 记忆页（标准版长期记忆）
+// GET/POST/PUT/DELETE /api/memory；开关经 PUT /api/config 全量回写（热重载）。
+// ===========================================================================
+let MEMORIES = [];
+const MEM_KIND_LABELS = { fact: "事实", preference: "喜好", note: "备注" };
+
+function memFeedback(msg, cls) {
+  const fb = $("mem-feedback");
+  fb.textContent = msg;
+  fb.className = cls || "";
+}
+
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+async function loadMemories() {
+  try {
+    const resp = await fetch("/api/memory");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    MEMORIES = data.memories || [];
+    $("mem-enabled").checked = !!data.enabled;
+    $("mem-auto-extract").checked = !!data.auto_extract;
+    $("mem-max").textContent = data.max_items != null ? data.max_items : "—";
+    renderMemories();
+  } catch (e) {
+    memFeedback("❌ 加载记忆失败：" + e.message, "err");
+  }
+}
+
+function renderMemories() {
+  $("mem-count").textContent = MEMORIES.length;
+  const box = $("mem-list");
+  box.innerHTML = "";
+  if (!MEMORIES.length) {
+    box.innerHTML = '<div style="color:var(--muted)">暂无记忆。对话中会自动提取，或在上方手动添加。</div>';
+    return;
+  }
+  for (const m of MEMORIES) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap";
+    const kind = document.createElement("span");
+    kind.className = "tag";
+    kind.style.cssText = "color:var(--accent);border:1px solid var(--accent)";
+    kind.textContent = MEM_KIND_LABELS[m.kind] || m.kind;
+    const content = document.createElement("span");
+    content.style.cssText = "flex:1;min-width:200px;word-break:break-all";
+    content.textContent = m.content;
+    const meta = document.createElement("span");
+    meta.style.cssText = "color:var(--muted);font-size:11px;white-space:nowrap";
+    meta.textContent = `使用 ${m.use_count || 0} 次 · ${m.created_at || ""}`;
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn"; editBtn.textContent = "编辑";
+    editBtn.addEventListener("click", () => editMemory(m));
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn danger"; delBtn.textContent = "删除";
+    delBtn.addEventListener("click", () => deleteMemory(m.id));
+    row.append(kind, content, meta, editBtn, delBtn);
+    box.appendChild(row);
+  }
+}
+
+async function addMemory() {
+  const content = $("mem-new-content").value.trim();
+  const kind = $("mem-new-kind").value;
+  if (!content) { memFeedback("❌ 请输入记忆内容", "err"); return; }
+  try {
+    const resp = await fetch("/api/memory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, kind }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) { memFeedback("❌ " + (data.detail || data.error || "添加失败"), "err"); return; }
+    $("mem-new-content").value = "";
+    memFeedback("✅ 已添加", "ok");
+    await loadMemories();
+  } catch (e) { memFeedback("❌ 网络错误：" + e.message, "err"); }
+}
+
+async function editMemory(m) {
+  const newContent = prompt("编辑记忆内容：", m.content);
+  if (newContent === null) return;
+  const content = newContent.trim();
+  if (!content) { memFeedback("❌ 内容不能为空", "err"); return; }
+  const newKind = prompt("类型（fact=事实 / preference=喜好 / note=备注）：", m.kind);
+  const kind = (newKind || m.kind || "fact").trim();
+  try {
+    const resp = await fetch("/api/memory/" + m.id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, kind }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) { memFeedback("❌ " + (data.detail || data.error || "编辑失败"), "err"); return; }
+    memFeedback("✅ 已保存", "ok");
+    await loadMemories();
+  } catch (e) { memFeedback("❌ 网络错误：" + e.message, "err"); }
+}
+
+async function deleteMemory(id) {
+  if (!confirm("确定删除这条记忆吗？")) return;
+  try {
+    const resp = await fetch("/api/memory/" + id, { method: "DELETE" });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) { memFeedback("❌ " + (data.detail || data.error || "删除失败"), "err"); return; }
+    memFeedback("✅ 已删除", "ok");
+    await loadMemories();
+  } catch (e) { memFeedback("❌ 网络错误：" + e.message, "err"); }
+}
+
+async function saveMemoryToggle() {
+  // PUT /api/config 需要全量配置 body：先 GET 当前配置，改 memory 字段后回写（热重载）
+  try {
+    const resp = await fetch("/api/config");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    const cfg = data.config || {};
+    cfg.brain = cfg.brain || {};
+    cfg.brain.memory = cfg.brain.memory || {};
+    cfg.brain.memory.enabled = $("mem-enabled").checked;
+    cfg.brain.memory.auto_extract = $("mem-auto-extract").checked;
+    const saveResp = await fetch("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cfg),
+    });
+    const saveData = await saveResp.json();
+    if (!saveResp.ok) {
+      const detail = Array.isArray(saveData.detail)
+        ? saveData.detail.map((d) => (d.loc || []).join(".") + ": " + d.msg).join("；")
+        : (saveData.detail || saveData.error || "保存失败");
+      memFeedback("❌ " + detail, "err");
+      await loadMemories();  // 回显真实状态
+      return;
+    }
+    memFeedback("✅ 已保存并热重载", "ok");
+    await loadMemories();
+  } catch (e) {
+    memFeedback("❌ 网络错误：" + e.message, "err");
+  }
+}
+
+// ===========================================================================
+// 音色克隆（CosyVoice）：GET /api/voice 回显 + POST /api/voice/clone 克隆
+// + POST /api/voice/select 设为当前音色（下次合成直接复用）
+// ===========================================================================
+function voiceFeedback(msg, cls) {
+  const fb = $("voice-clone-status");
+  fb.textContent = msg;
+  fb.className = cls || "";
+}
+
+async function loadVoices() {
+  try {
+    const resp = await fetch("/api/voice");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    $("voice-current-id").textContent = data.current_voice_id || "—";
+    renderVoices(data.voices || []);
+  } catch (e) {
+    // 未接线/未启动：保留默认占位，不打扰
+  }
+}
+
+function renderVoices(list) {
+  const box = $("voice-list");
+  box.innerHTML = "";
+  if (!list.length) {
+    box.innerHTML = '<div style="color:var(--muted);font-size:12px">暂无已保存音色</div>';
+    return;
+  }
+  for (const v of list) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap";
+    const id = document.createElement("span");
+    id.style.cssText = "flex:1;min-width:200px;word-break:break-all;font-family:monospace;font-size:12px";
+    id.textContent = v.id;
+    const meta = document.createElement("span");
+    meta.style.cssText = "color:var(--muted);font-size:11px;white-space:nowrap";
+    meta.textContent = (v.model || "") + (v.created_at ? " · " + v.created_at : "");
+    if (v.current) {
+      const cur = document.createElement("span");
+      cur.className = "tag hot"; cur.textContent = "当前";
+      row.append(id, meta, cur);
+    } else {
+      const sel = document.createElement("button");
+      sel.className = "btn"; sel.textContent = "设为当前音色";
+      sel.addEventListener("click", () => selectVoice(v.id));
+      row.append(id, meta, sel);
+    }
+    box.appendChild(row);
+  }
+}
+
+async function cloneVoice() {
+  const url = $("voice-audio-url").value.trim();
+  if (!url) { voiceFeedback("❌ 请输入参考音频 URL", "err"); return; }
+  const btn = $("voice-clone-btn");
+  btn.disabled = true;
+  btn.textContent = "克隆中…（最长约 5 分钟）";
+  voiceFeedback("⏳ 已提交克隆，等待 DashScope 处理…", "");
+  try {
+    const resp = await fetch("/api/voice/clone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio_url: url }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      voiceFeedback("❌ " + (data.detail || data.error || "克隆失败"), "err");
+      return;
+    }
+    voiceFeedback("✅ 克隆成功，已设为当前音色：" + escHtml(data.voice_id), "ok");
+    $("voice-audio-url").value = "";
+    await loadVoices();
+  } catch (e) {
+    voiceFeedback("❌ 网络错误：" + e.message, "err");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "克隆音色";
+  }
+}
+
+async function selectVoice(voiceId) {
+  try {
+    const resp = await fetch("/api/voice/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voice_id: voiceId }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      voiceFeedback("❌ " + (data.detail || data.error || "设为当前音色失败"), "err");
+      return;
+    }
+    voiceFeedback("✅ 已设为当前音色：" + escHtml(voiceId), "ok");
+    await loadVoices();
+  } catch (e) {
+    voiceFeedback("❌ 网络错误：" + e.message, "err");
+  }
+}
+
+// ===========================================================================
+// 导航 + 初始化
+// ===========================================================================
+function switchPage(name) {
+  document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach((b) => b.classList.remove("active"));
+  $("page-" + name).classList.add("active");
+  $("nav-" + name).classList.add("active");
+}
+
+document.querySelectorAll("nav button:not(:disabled)").forEach((btn) => {
+  btn.addEventListener("click", () => switchPage(btn.dataset.page));
+});
+$("btn-save").addEventListener("click", saveConfig);
+$("btn-reset").addEventListener("click", async () => {
+  try { await loadConfig(); $("saveResult").textContent = ""; }
+  catch (e) { $("saveResult").className = "err"; $("saveResult").textContent = "❌ " + e.message; }
+});
+$("mem-add").addEventListener("click", addMemory);
+$("mem-refresh").addEventListener("click", loadMemories);
+$("mem-enabled").addEventListener("change", saveMemoryToggle);
+$("mem-auto-extract").addEventListener("change", saveMemoryToggle);
+$("nav-memory").addEventListener("click", loadMemories);
+$("voice-clone-btn").addEventListener("click", cloneVoice);
+bindControlButtons();
+
+(async function init() {
+  try { await loadConfig(); } catch (e) {
+    $("saveResult").className = "err";
+    $("saveResult").textContent = "❌ " + e.message;
+  }
+  loadMemories().catch(() => {});
+  loadVoices().catch(() => {});
+  connectSSE();
+})();
+</script>
+</body>
+</html>

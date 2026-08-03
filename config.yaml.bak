@@ -1,0 +1,155 @@
+asr:
+  engine: whisper
+  model_size: medium
+  model_path: E:/vrc翻译/vrc_chat_translator/model/large-v3-turbo
+  device: cuda
+  compute_type: float16
+  language: zh
+  decoding_method: greedy_search
+  vad_mode: 2
+  min_speech_ms: 300
+  silence_ms: 1000
+  max_segment_s: 15
+audio:
+  input:
+    device: '1'
+    sample_rate: 16000
+    chunk_ms: 30
+    silence_threshold: 0.005
+    filter_enabled: true
+    filter_blocklist:
+    - 字幕志愿者
+    - 谢谢观看
+    - 字幕
+    - 谢谢大家
+    - 背景音乐
+    - 欢迎订阅
+    - 感谢观看
+    - 请不吝点赞 订阅 转发 打赏支持明镜与点点栏目
+    - 优优独播剧场——YoYo Television Series Exclusive
+    - 词曲 李宗盛
+    - 好好
+    - 詞・曲・ 李宗盛
+    filter_exact_words:
+    - 好
+    - 嗯
+    - 啊
+    - 哦
+    filter_min_length: 1
+  output:
+    device: '8'
+    sample_rate: 16000
+brain:
+  llm:
+    provider: openai
+    base_url: https://token-plan-cn.xiaomimimo.com/v1
+    api_key_env: LLM_API_KEY
+    model: mimo-v2.5
+    temperature: 0.7
+    max_tokens: 23808
+    timeout: 45.0
+    vision_enabled: true
+  persona:
+    name: Vivi
+    system_prompt: 你是一个住在 VRChat 虚拟世界里的活泼少女 Vivi，喜欢交朋友、爱开玩笑，说话简短自然，偶尔用一点颜文字。
+  context:
+    max_turns: 10
+  memory:
+    enabled: true
+    db_path: data/memory.db
+    max_items: 200
+    inject_limit: 5
+    auto_extract: true
+    extract_interval: 3
+    extract_max_items: 5
+  vision_mode: reference_only
+speech:
+  tts:
+    provider: cosyvoice
+    api_key_env: TTS_API_KEY
+    voice: alloy
+    edge_voice: zh-CN-XiaoxiaoNeural
+    rate: 0
+    volume: 0
+    timeout: 10.0
+    emotion_voice:
+      happy: alloy
+      sad: echo
+      angry: onyx
+      calm: nova
+    tts_clone:
+      base_url: http://127.0.0.1:8000
+      method: post
+      ref_audio_path: ''
+      ref_text: ''
+      lang: zh
+      timeout: 60.0
+    tts_mimo:
+      base_url: https://api.xiaomimimo.com/v1
+      api_key_env: MIMO_TTS_API_KEY
+      model: mimo-v2.5-tts-voiceclone
+      ref_audio_path: C:\Users\14718\Documents\Voicemeeter\Record 2026-08-03 at 14h30m03s.wav
+      timeout: 60.0
+    tts_cosyvoice:
+      api_key_env: DASHSCOPE_API_KEY
+      model: cosyvoice-v3.5-plus
+      voice_id: cosyvoice-v3.5-plus-myvoice-6ffa454f087a4d049aba5c6614d0f625
+      timeout: 60.0
+  output:
+    device: '8'
+    sample_rate: 16000
+action:
+  mapping:
+    path: mappings/avatar_default.yaml
+  bridge:
+    command: C:/Users/14718/.workbuddy/binaries/node/versions/22.22.2/node.exe
+    args:
+    - E:/vrc具身agent/vrchat_agent/node_bridge/node_modules/@iflow-mcp/krekun-vrchat-mcp-osc/packages/mcp-server/dist/server.js
+    timeout: 5.0
+vision:
+  sensor:
+    backend: window_capture
+    obs_host: localhost
+    obs_port: 4455
+    obs_password: ''
+    source_name: ''
+    camera_device: 0
+    window_title_keyword: VRChat
+  sampling:
+    fps: 0.5
+    max_size: 768
+    jpeg_quality: 80
+    event_trigger: true
+    change_threshold: 0.12
+agent:
+  loop:
+    think_timeout: 20.0
+    tts_timeout: 10.0
+    action_timeout: 5.0
+    latency_budget_s: 8.0
+  interrupt:
+    enabled: true
+  degradation:
+    message: 网络不佳，请稍后再试
+    beep: true
+  chatbox_sync: true
+  startup_check: true
+  utterance_queue:
+    enabled: true
+    max_batch: 3
+dashboard:
+  enabled: true
+  terminal: true
+  refresh_ms: 500
+  obs_overlay: false
+emergency:
+  hotkey: ctrl+alt+x
+  flag_file: logs/emergency_stop.flag
+logging:
+  level: INFO
+  file: logs/agent.jsonl
+web:
+  enabled: true
+  host: 127.0.0.1
+  port: 0
+  auto_open_browser: true

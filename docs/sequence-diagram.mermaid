@@ -1,0 +1,59 @@
+sequenceDiagram
+    participant ASR as AudioPipeline
+    participant PC as PipelineCoordinator
+    participant LLM as Brain (LLM)
+    participant TTS as TTSEngine
+    participant OS as OutputSlot
+    participant AO as AudioOutput
+    participant ACT as Actuator
+
+    Note over ASR: 玩家说 "你好"
+    ASR->>PC: submit("你好") → utt_1
+    PC->>LLM: decide("你好") [utt_1 LLM_RUNNING]
+
+    Note over ASR: 玩家又说 "你在干嘛"（utt_1 仍在 LLM）
+    ASR->>PC: submit("你在干嘛") → utt_2
+    PC->>LLM: decide("你在干嘛") [utt_2 LLM_RUNNING]
+
+    LLM-->>PC: Decision(respond=True, "你好呀～") [utt_1 LLM_DONE]
+    PC->>TTS: synthesize("你好呀～") [utt_1 TTS_RUNNING]
+
+    Note over ASR: 玩家又说 "过来一下"（utt_1 TTS 中，utt_2 LLM 中）
+    ASR->>PC: submit("过来一下") → utt_3
+    PC->>LLM: decide("过来一下") [utt_3 LLM_RUNNING]
+
+    LLM-->>PC: Decision(respond=True, "在和朋友聊天呢") [utt_2 LLM_DONE]
+    PC->>TTS: synthesize("在和朋友聊天呢") [utt_2 TTS_RUNNING]
+
+    TTS-->>PC: AudioClip [utt_1 TTS_DONE]
+    PC->>OS: enqueue(utt_1)
+    OS->>OS: acquire lock
+    par 三路并发
+        OS->>AO: play(clip_1)
+        OS->>ACT: execute(actions_1)
+        OS->>ACT: execute(chatbox_1)
+    end
+    Note over OS: utt_1 PLAYING
+
+    LLM-->>PC: Decision(respond=True, "好的来了") [utt_3 LLM_DONE]
+    PC->>TTS: synthesize("好的来了") [utt_3 TTS_RUNNING]
+
+    TTS-->>PC: AudioClip [utt_2 TTS_DONE]
+    PC->>OS: enqueue(utt_2)
+    Note over OS: utt_2 排队等待（utt_1 播放中）
+
+    AO-->>OS: play done [utt_1 DONE]
+    OS->>OS: release lock
+
+    OS->>OS: acquire lock (utt_2)
+    par 三路并发
+        OS->>AO: play(clip_2)
+        OS->>ACT: execute(actions_2)
+        OS->>ACT: execute(chatbox_2)
+    end
+
+    TTS-->>PC: AudioClip [utt_3 TTS_DONE]
+    PC->>OS: enqueue(utt_3)
+
+    AO-->>OS: play done [utt_2 DONE]
+    OS->>OS: next...

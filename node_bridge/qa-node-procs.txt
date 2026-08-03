@@ -1,0 +1,4 @@
+﻿PID=26416 :: "C:\Users\14718\.workbuddy\binaries\node\versions\22.22.2\node.exe"  "C:\Users\14718\.workbuddy\plugins\cache\workbuddy-builtin\weixinpay\1.5.111/dist/mcp-server.mjs"
+PID=28236 :: "C:\Users\14718\.workbuddy\binaries\node\versions\22.22.2\node.exe"  "C:\Users\14718\.workbuddy\plugins\cache\workbuddy-builtin\weixinpay\1.5.111/dist/mcp-server.mjs"
+PID=4824 :: C:\Users\14718\.workbuddy\binaries\node\versions\22.22.2\node.exe node_modules/@iflow-mcp/krekun-vrchat-mcp-osc/packages/mcp-server/dist/server.js
+PID=26516 :: node E:\vrc具身agent\vrchat_agent\node_bridge\node_modules\@iflow-mcp\krekun-vrchat-mcp-osc\packages\relay-server\dist\index.js

@@ -1,0 +1,34 @@
+2026-08-01T19:31:36.401Z [MCPServer] INFO: Processing 0 command line arguments: 
+2026-08-01T19:31:36.405Z [MCPServer] INFO: Parsed options: {}
+2026-08-01T19:31:36.405Z [MCPServer] INFO: Setting environment variables from command line options
+2026-08-01T19:31:36.406Z [MCPServer] INFO: Found relay server at path: E:\vrc具身agent\vrchat_agent\node_bridge\node_modules\@iflow-mcp\krekun-vrchat-mcp-osc\packages\relay-server\dist\index.js
+2026-08-01T19:31:36.407Z [MCPServer] INFO: Current options: {}
+2026-08-01T19:31:36.407Z [MCPServer] INFO: Command line arguments: C:\Users\14718\.workbuddy\binaries\node\versions\22.22.2\node.exe E:\vrc具身agent\vrchat_agent\node_bridge\node_modules\@iflow-mcp\krekun-vrchat-mcp-osc\packages\mcp-server\dist\server.js
+2026-08-01T19:31:36.408Z [RelayServerManager] INFO: RelayServerManager initialized
+2026-08-01T19:31:36.413Z [MCPServer] INFO: Initializing VRChat OSC MCP server
+2026-08-01T19:31:36.414Z [MCPServer] INFO: Starting relay server...
+2026-08-01T19:31:36.414Z [RelayServerManager] INFO: Starting relay server process
+2026-08-01T19:31:36.716Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.714Z [config] INFO: Loaded configuration from environment variables
+2026-08-01T19:31:36.717Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.716Z [config] INFO: Configuration initialized
+2026-08-01T19:31:36.724Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.724Z [OscClient] INFO: Looking for avatar configs in C:\Users\14718\AppData\LocalLow\VRChat\VRChat\OSC
+2026-08-01T19:31:36.725Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.725Z [OscClient] INFO: Checking C:\Users\14718\AppData\LocalLow\VRChat\VRChat\OSC\usr_de5cffae-dec0-4dbb-9ba4-3a46a151cbe0
+2026-08-01T19:31:36.726Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.726Z [OscClient] INFO: Loaded 3 avatar configurations
+2026-08-01T19:31:36.726Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.726Z [OscClient] INFO: OSC client created (send: 127.0.0.1:9000, receive: 127.0.0.1:9001)
+2026-08-01T19:31:36.726Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.726Z [RelayServer] INFO: Starting VRChat OSC relay server
+2026-08-01T19:31:36.726Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.726Z [RelayServer] INFO: Starting VRChat OSC relay server
+2026-08-01T19:31:36.727Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.726Z [OscClient] INFO: SENDING OSC: /chatbox/input ["OSC client connected", true, true]
+2026-08-01T19:31:36.727Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.727Z [OscClient] INFO: OSC-MSG-msarp2mv19x: Sending message to /chatbox/input with value ["OSC client connected", true, true]
+2026-08-01T19:31:36.727Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.728Z [OscClient] INFO: OSC server listening on 127.0.0.1:9001
+2026-08-01T19:31:36.731Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.731Z [RelayServer] INFO: VRChat OSC relay server started successfully
+2026-08-01T19:31:36.731Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.731Z [RelayServer] INFO: VRChat OSC relay server started successfully
+2026-08-01T19:31:36.733Z [RelayServerManager] ERROR: [RelayServer] 2026-08-01T19:31:36.733Z [OscClient] INFO: OSC-MSG-msarp2mv19x: Successfully sent
+2026-08-01T19:31:37.521Z [RelayServerManager] INFO: Relay server started successfully
+2026-08-01T19:31:37.522Z [MCPServer] INFO: Relay server started successfully
+2026-08-01T19:31:37.523Z [MCPServer] INFO: Connecting to WebSocket server...
+2026-08-01T19:31:37.523Z [WebSocketClient] INFO: Connecting to WebSocket server at ws://localhost:8765
+2026-08-01T19:31:37.523Z [WebSocketClient] INFO: Connection attempt 1 of 3
+2026-08-01T19:31:37.541Z [WebSocketClient] INFO: Connected to WebSocket server
+2026-08-01T19:31:37.541Z [WebSocketClient] INFO: Testing connection (attempt 1 of 3)
+2026-08-01T19:31:37.543Z [WebSocketClient] INFO: Connection test successful
+2026-08-01T19:31:37.543Z [MCPServer] INFO: Connecting to MCP transport...
+2026-08-01T19:31:37.544Z [MCPServer] INFO: VRChat OSC MCP server initialized successfully

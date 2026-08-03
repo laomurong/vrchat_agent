@@ -1,0 +1,566 @@
+# ============================================================
+# 语义动作 → OSC 工具调用 映射表（vrchat-mcp-osc 真实工具名版）
+# 说明：
+#   - key 格式：kind:name（name 取自 LLM 决策 actions[].params.name）
+#   - tool 为 vrchat-mcp-osc 实际暴露的 MCP 工具名（以
+#     node_bridge/.../mcp-server/dist/server.js 的 server.tool(...) 注册为准）
+#   - 每个条目的 args 按对应工具 input schema 填（必填字段齐全）
+#   - args 模板支持 {param} 占位符，由动作 params 动态填充（如 chatbox:reply 的 {message}）
+#
+# 【不同 avatar 换映射文件】——任务 3 校准流程：
+#   1. 实机换好 avatar 后运行：conda activate vrchat-agent
+#      python scripts/calibrate_actions.py [--config config.yaml] [--probe]
+#   2. 脚本会拉起 OSC 桥接，用 get_avatar_parameters 列出当前 avatar 真实参数名，
+#      并按关键词自动生成建议映射（Wave/Bow/Clap/Dance/Laugh/Point/ThumbsUp/Jump 等）。
+#   3. 把建议映射写入本文件（或复制为 mappings/avatar_<名字>.yaml，
+#      再在 config.yaml → action.mapping.path 切换），重启 Agent 生效。
+#
+# 可用工具清单（server.js 实际注册，共 28 个）：
+# - 上游原生（12）：get_avatar_list / set_avatar / get_avatar_name /
+#   set_avatar_parameter / get_avatar_parameters / set_emote_parameter /
+#   move_avatar / look_direction / jump / menu / voice / send_message
+# - patch-krekun-osc-expand.js 追加（16）：
+#     按钮：run / use_right / use_left / grab_right / grab_left /
+#           drop_right / drop_left / toggle_sit_stand / afk_toggle /
+#           panic_button / quick_menu_right
+#     轴与参数：move_axis / look_axis / set_gesture / set_typing_indicator
+#     通用逃生通道：send_raw_osc（任意 OSC 地址，地址大小写敏感）
+#   ⚠️ server.js 未注册 reset 工具 → 急停复位走下方 emergency_reset（问题 1 修复）。
+# - 伪工具（1，不在 MCP 里注册）：send_key —— 由 Python 侧
+#   action/key_sender.py 用 Win32 PostMessage 向 VRChat 窗口注入真实按键。
+#   ⚠️ VRChat 官方 OSC 输入白名单没有 Crouch/Prone，蹲下/趴下只能走键盘注入，
+#      详见下方 pose:crouch / pose:prone 条目与 key_sender.py 模块文档。
+#
+# 【自动复位（问题 1）】
+# - set_emote_parameter / set_avatar_parameter 写入 VRChat 参数后是**持续状态**
+#   （不自动复原），因此 emote/gesture 条目配置 `reset`：执行 delay 秒后自动
+#   调用复位工具（emote → value:0；gesture → value:false），实现"动作自动停/复位"。
+# - move_avatar / look_direction 内部"按住 duration 秒自动松开"、jump 瞬时，
+#   无需复位（已确认 server.js/inputTools.js 语义）。
+# - reset 支持两种形态：
+#     reset: {delay: 3.0, tool: set_emote_parameter, args: {value: 0}}       # 单工具
+#     reset: {delay: 3.0, tools: [{tool: ..., args: {...}}, ...]}            # 多工具
+# - 连续触发同一动作时复位计时重置；急停/关闭时未执行的复位任务被取消。
+# ============================================================
+actions:
+  # ---- 表情 emote → set_emote_parameter（写入 VRCEmote 内置参数）----
+  # VRCEmote 是数值索引（0=无表情，1~8 对应目标 avatar Expressions 菜单顺序）。
+  # ⚠️ 索引与语义（wave/bow/...）的对应关系因 avatar 而异：
+  #    请按目标 avatar 的 Expressions 菜单顺序校准（或用 get_avatar_parameters 查询）。
+  # 持续型 → 3 秒后自动复位 value=0。
+  emote:wave:
+    tools:
+      - tool: set_emote_parameter
+        args: { value: 1 }
+    reset: { delay: 3.0, tool: set_emote_parameter, args: { value: 0 } }
+  emote:bow:
+    tools:
+      - tool: set_emote_parameter
+        args: { value: 2 }
+    reset: { delay: 3.0, tool: set_emote_parameter, args: { value: 0 } }
+  emote:dance:
+    tools:
+      - tool: set_emote_parameter
+        args: { value: 3 }
+    reset: { delay: 3.0, tool: set_emote_parameter, args: { value: 0 } }
+  emote:clap:
+    tools:
+      - tool: set_emote_parameter
+        args: { value: 4 }
+    reset: { delay: 3.0, tool: set_emote_parameter, args: { value: 0 } }
+  emote:laugh:
+    tools:
+      - tool: set_emote_parameter
+        args: { value: 5 }
+    reset: { delay: 3.0, tool: set_emote_parameter, args: { value: 0 } }
+
+  # ---- 手势 gesture → set_avatar_parameter（avatar 自定义参数）----
+  # ⚠️ 参数名需按目标 avatar 校准：不同 avatar 的手势参数名不同（Wave/ThumbsUp/...）。
+  #    可用工具 get_avatar_parameters 查询当前 avatar 实际暴露的参数名后再替换。
+  # 持续型（value=true）→ 3 秒后自动复位 value=false。
+  gesture:point:
+    tools:
+      - tool: set_avatar_parameter
+        args: { parameter_name: Point, value: true }
+    reset:
+      delay: 3.0
+      tool: set_avatar_parameter
+      args: { parameter_name: Point, value: false }
+  gesture:thumbs_up:
+    tools:
+      - tool: set_avatar_parameter
+        args: { parameter_name: ThumbsUp, value: true }
+    reset:
+      delay: 3.0
+      tool: set_avatar_parameter
+      args: { parameter_name: ThumbsUp, value: false }
+  gesture:wave_hand:
+    tools:
+      - tool: set_avatar_parameter
+        args: { parameter_name: Wave, value: true }
+    reset:
+      delay: 3.0
+      tool: set_avatar_parameter
+      args: { parameter_name: Wave, value: false }
+
+  # ---- 移动 move → move_avatar ----
+  # ⚠️ 输入级驱动：move_avatar 内部"按住 duration 秒后自动松开"（inputTools.js move()：
+  #    sendInput(方向, 1) → delay(duration*1000) → sendInput(方向, 0)），等价于按住键盘
+  #    方向键 duration 秒。移动距离 = 游戏内移动速度 × duration（与 avatar/世界有关），
+  #    **无位移参数**，需按需调整（0.8s 约走 2~4 步，实机校准）。
+  # ⚠️ 已知桥接缺陷（inputTools.js L46）：direction=left 硬编码为 'Moveleft'（小写 l），
+  #    VRChat OSC 输入名大小写敏感 → /input/Moveleft 无效，move:left 实机可能不生效。
+  #    修复：node_bridge/scripts/patch-krekun-osc-crouch.js 的 postinstall patch 会把
+  #    'Moveleft' 改为 'MoveLeft'（大小写正确），patch 后 move:left 真实生效。
+  #    （若尚未跑过 patch，仍可用 move:forward + look:left 组合临时规避。）
+  move:forward:
+    tools:
+      - tool: move_avatar
+        args: { direction: forward, duration: 0.8 }
+  move:backward:
+    tools:
+      - tool: move_avatar
+        args: { direction: backward, duration: 0.8 }
+  move:left:
+    tools:
+      - tool: move_avatar
+        args: { direction: left, duration: 0.6 }
+  move:right:
+    tools:
+      - tool: move_avatar
+        args: { direction: right, duration: 0.6 }
+  # ---- move 兜底（LLM 无 name，问题：往前移动不生效）----
+  # LLM 可能输出 {"kind": "move", "params": {}}（无 name，如只说了"往前移动"没带方向）。
+  # ActionMapper 会做 kind:kind 兜底（move → move:move），默认向前移动——
+  # 与 jump:jump 兜底模式一致（jump → jump:jump）。prompt 已要求 move 必带
+  # params.name（forward/backward/left/right），本条目是最后防线，保证"动了"。
+  move:move:
+    tools:
+      - tool: move_avatar
+        args: { direction: forward, duration: 0.8 }
+
+  # ---- 跳跃 jump → jump ----
+  # LLM 可能输出 {"kind": "jump", "params": {}}（无 name）→ key=jump；
+  # ActionMapper 会做 kind:kind 兜底（jump → jump:jump），故只需保留 jump:jump 条目。
+  jump:jump:
+    tools:
+      - tool: jump
+        args: {}
+
+  # ---- 姿态 pose → 键盘注入 C / Z 键（不是 OSC！）----
+  # ⚠️ 根因备忘（Bug 修复，勿改回 OSC）：
+  #    VRChat 官方 OSC 输入白名单 /input/* **从未开放 Crouch 与 Prone** ——
+  #    桌面客户端的 C（蹲下）/ Z（趴下）只是客户端本地键位绑定，没有 OSC 地址。
+  #    向 /input/Crouch 发包不会报错（UDP 无回执，桥接也认为"发送成功"），
+  #    但 VRChat 端静默丢弃 → 表现为"链路全通、动作就是不生效"。
+  # ✅ 现方案：tool: send_key 是**伪工具**，不走 MCP/OSC，由 Python 侧
+  #    action/key_sender.py 用 Win32 PostMessage 向 VRChat 窗口注入真实按键
+  #    （WM_KEYDOWN → 保持 duration 秒 → WM_KEYUP），派发见 mcp_actuator.KEY_TOOL。
+  #    VRChat 输入语义：C = 按住蹲下、松开站起；Z = 切换型（按一次躺下、再按一次起身），
+  #    短按（0.3~0.6s）即可触发切换。
+  #    前提：VRChat 桌面客户端窗口存在（窗口找不到只 WARNING 不报错，见 actuator）。
+  pose:crouch:
+    tools:
+      - tool: send_key
+        args: { key: "c", duration: 0.6 }
+  pose:prone:
+    tools:
+      - tool: send_key
+        args: { key: "z", duration: 0.6 }
+
+  # ---- 视角 look → look_direction ----
+  # ⚠️ 输入级驱动：look_direction 也是"按住 LookLeft/LookRight 按钮 duration 秒"
+  #    （tryButtonLook），视角旋转速度是 VRChat 游戏内置固定值（桌面模式约 90~180°/s），
+  #    **无角度参数**——"转 180 度"只能靠按住足够久或多次触发。
+  # ⚠️ 桥接 bug（inputTools.js tryButtonLook L221）：实际按住时长 = (duration + 2) * 100 ms
+  #    （即 0.1×duration + 0.2 秒），**不是** duration 秒！换算参考（按 ~130°/s 估算）：
+  #      duration 0.5 → 按住 250ms ≈ 30~45°（旧默认，几乎不动）
+  #      duration 1.5 → 按住 350ms ≈ 45~60°
+  #      duration 2.5 → 按住 450ms ≈ 60~90°
+  #    ⚠️ 按住期间不能做其他动作；duration 越大越"过头"，请按实机校准调整。
+  # 要转更多 → 用下方大角度变体（repeat 多次触发，每次"按住→松开"累计转角，
+  # 比盲目加大 duration 更可控；LLM 输出对应 params.name 即可）。
+  look:left:
+    tools:
+      - tool: look_direction
+        args: { direction: left, duration: 1.5 }
+  look:right:
+    tools:
+      - tool: look_direction
+        args: { direction: right, duration: 1.5 }
+  # 大角度变体：look:left_big / right_big（单次大转，duration 更大）
+  look:left_big:
+    tools:
+      - tool: look_direction
+        args: { direction: left, duration: 2.5 }
+  look:right_big:
+    tools:
+      - tool: look_direction
+        args: { direction: right, duration: 2.5 }
+  # 转身变体：look:turn_left / turn_right（repeat 2 次，累计 ~90~140°）
+  look:turn_left:
+    tools:
+      - tool: look_direction
+        args: { direction: left, duration: 1.5 }
+    repeat: 2
+  look:turn_right:
+    tools:
+      - tool: look_direction
+        args: { direction: right, duration: 1.5 }
+    repeat: 2
+  # 转圈变体：look:turn_around_left / turn_around_right（repeat 4 次，累计 ~180~280°）
+  look:turn_around_left:
+    tools:
+      - tool: look_direction
+        args: { direction: left, duration: 1.5 }
+    repeat: 4
+  look:turn_around_right:
+    tools:
+      - tool: look_direction
+        args: { direction: right, duration: 1.5 }
+    repeat: 4
+  # 上下视角：look:up / look:down（小角度抬头/低头）
+  # ⚠️ 根因备忘（Bug 修复，勿改回 look_direction）：
+  #    look_direction{direction:up/down} 底层发 /input/LookDown/LookUp 按钮信号，
+  #    但 VRChat Desktop 默认**不绑定**这两个按键（上下视角由鼠标驱动，无默认键位），
+  #    导致按钮 OSC 无效。look_axis{axis:vertical, value:±0.5} 发 /input/LookVertical
+  #    轴信号，直接驱动摄像机不经过按键绑定 → 有效。
+  #    现改为 look_axis 实现，与 look:tilt_up/tilt_down 同机制，仅 value/duration 略异。
+  look:up:
+    tools:
+      - tool: look_axis
+        args: { axis: vertical, value: 0.5, duration: 1.0 }
+  look:down:
+    tools:
+      - tool: look_axis
+        args: { axis: vertical, value: -0.5, duration: 1.0 }
+  # 大角度变体：look:up_big / look:down_big
+  #    加大 value 绝对值 + 延长 duration 实现更大幅度的上下转动。
+  look:up_big:
+    tools:
+      - tool: look_axis
+        args: { axis: vertical, value: 0.8, duration: 1.5 }
+  look:down_big:
+    tools:
+      - tool: look_axis
+        args: { axis: vertical, value: -0.8, duration: 1.5 }
+
+  # ---- 聊天框 chatbox → send_message ----
+  # send_message 必填 message；send_immediately=true 表示立即发送到 VRChat chatbox。
+  # chatbox:reply 由主循环在每次 AI 回复时自动附加（agent.chatbox_sync=true），
+  # message 为动态占位符 {message}，由动作参数 params.message 填充（ActionMapper 支持）。
+  chatbox:greet:
+    tools:
+      - tool: send_message
+        args: { message: "你好！很高兴见到你～", send_immediately: true }
+  chatbox:bye:
+    tools:
+      - tool: send_message
+        args: { message: "再见！下次再一起玩～", send_immediately: true }
+  chatbox:reply:
+    tools:
+      - tool: send_message
+        args: { message: "{message}", send_immediately: true }
+  # 打字指示器（/chatbox/typing）：TTS 合成/思考期间显示"正在输入"气泡，
+  # 让真人玩家知道 Agent 在准备回复（避免冷场）。持续型 → 5 秒后自动关闭。
+  chatbox:typing:
+    tools:
+      - tool: set_typing_indicator
+        args: { typing: true }
+    reset: { delay: 5.0, tool: set_typing_indicator, args: { typing: false } }
+
+  # ============================================================
+  # 以下由 node_bridge/scripts/patch-krekun-osc-expand.js 追加的工具驱动
+  # （postinstall 链第 4 步）。patch 未执行时 server.js 无这些工具 →
+  # 动作执行失败并 WARNING（见 actuator），请重跑 node_bridge 的 npm install。
+  # ============================================================
+
+  # ---- 交互按钮 input → /input/<Name>（按住 duration 秒后松开）----
+  # ⚠️ OSC 输入名大小写敏感，已在 patch 内写死为 VRChat 官方拼写
+  #    （Run / UseRight / GrabLeft / ToggleSitStand / AFKToggle / PanicButton ...）。
+  # ⚠️ run 是**修饰键**，不是独立动作：在 VRChat 里单按 Run 而不移动是 no-op。
+  #    而编排层（_execute_actions）严格串行 await 每条动作，两次工具调用在时间
+  #    轴上永远不可能重叠 → 旧写法 `tool: run` 先按住 1.5s 松开、之后才开始移动
+  #    → 从来没真正冲刺过。P2-a：把"Run + 移动"的并发下沉到 Node 单次调用内部，
+  #    由 move_axis 的 run 参数在同一次调用里按住 Run 再驱动 Vertical 轴。
+  input:run:
+    tools:
+      - tool: move_axis
+        args: { axis: vertical, value: 1.0, duration: 1.2, run: true }
+  # use_right/use_left：与世界物体交互（拾取按钮、按开关、点 UI）——等价鼠标右键/左键"使用"
+  input:use_right:
+    tools:
+      - tool: use_right
+        args: { duration: 0.2 }
+  input:use_left:
+    tools:
+      - tool: use_left
+        args: { duration: 0.2 }
+  # grab_*：抓取物体。P2-b：抓握是**保持型**语义，旧写法 `grab_right{duration:0.6}`
+  #   在 Node 内部 press→delay(0.6s)→release，0.6s 后必然松手 → 抓起来就掉，
+  #   根本拿不住东西。改用 send_raw_osc + hold_ms:0 —— 只发按下值、立即返回、
+  #   不排释放（expand.js sendRawOsc 在 hold_ms<=0 时直接 return），这是现成的
+  #   "按下不松"原语，Node 侧零改动、工具数不变。
+  #   ⚠️ 不能改用 duration:30 的长按：Node 会 await delay(30s) 阻塞整条 MCP 调用，
+  #      Python 侧 action_timeout(5s) 先超时，主循环白卡 5s 且后续动作全排队。
+  #   "按下不松"把残留风险显式引入系统，因此有三层兜底，缺一不可：
+  #     第一层 reset delay:20 —— 20s 无人松手自动松（依赖 F-03 按 kind:name 分槽，
+  #             否则任意其它 input:* 动作都会把这条复位任务 cancel 掉 → 永久握住）；
+  #     第二层 emergency_reset —— 急停一键释放（见文件末尾）；
+  #     第三层 shutdown → reset() —— 进程退出释放（F-01）。
+  input:grab_right:
+    tools:
+      - tool: send_raw_osc
+        args: { address: /input/GrabRight, value: 1, hold_ms: 0 }
+    reset:
+      delay: 20.0
+      tool: send_raw_osc
+      args: { address: /input/GrabRight, value: 0, hold_ms: 0 }
+  input:grab_left:
+    tools:
+      - tool: send_raw_osc
+        args: { address: /input/GrabLeft, value: 1, hold_ms: 0 }
+    reset:
+      delay: 20.0
+      tool: send_raw_osc
+      args: { address: /input/GrabLeft, value: 0, hold_ms: 0 }
+  # drop_*：主动丢弃/扔出（/input/DropRight），与"松手自然放下"是两个物理动作。
+  #   两段式：先松开 Grab 再按 Drop —— 这样即使 LLM 只会说"放下"，握持状态也一定
+  #   被解除（零 key 漂移地拿到 release 能力）；若还握着就直接按 Drop，
+  #   VRChat 里 Grab 仍是按下态，松手后可能重新吸附。
+  input:drop_right:
+    tools:
+      - tool: send_raw_osc
+        args: { address: /input/GrabRight, value: 0, hold_ms: 0 }
+      - tool: drop_right
+        args: { duration: 0.15 }
+  input:drop_left:
+    tools:
+      - tool: send_raw_osc
+        args: { address: /input/GrabLeft, value: 0, hold_ms: 0 }
+      - tool: drop_left
+        args: { duration: 0.15 }
+  # sit_stand：在座椅/station 上切换坐下与起身（切换型，短按即可）
+  input:sit_stand:
+    tools:
+      - tool: toggle_sit_stand
+        args: { duration: 0.2 }
+  # afk：切换挂机状态（切换型）
+  input:afk:
+    tools:
+      - tool: afk_toggle
+        args: { duration: 0.2 }
+  # ⚠️ panic：VRChat 恐慌键，会强制开启 Safety Mode（屏蔽周围玩家的模型/音效）。
+  #    影响较大且需手动关闭，仅在明确要求"紧急/屏蔽所有人"时使用。
+  input:panic:
+    tools:
+      - tool: panic_button
+        args: { duration: 0.2 }
+  # quick_menu：打开右手快捷菜单（左手菜单用已有的 menu 工具，见 QuickMenuToggleLeft）
+  input:quick_menu:
+    tools:
+      - tool: quick_menu_right
+        args: { duration: 0.2 }
+
+  # ---- 模拟（轴）移动 move:smooth_* → move_axis ----
+  # 与上面离散的 move:forward/backward/left/right（move_avatar 按键式，恒为全速）区别：
+  #   move_axis 走 /input/Vertical、/input/Horizontal 浮点轴（-1.0~1.0），
+  #   value 可取 0.3~0.5 实现"慢慢走近"，1.0 为全速；duration 后自动归零（VRChat 要求）。
+  # ⚠️ 命名刻意区分：既有 move:forward 等保持原语义不变（避免破坏既有行为）。
+  move:smooth_forward:
+    tools:
+      - tool: move_axis
+        args: { axis: vertical, value: 0.5, duration: 1.0 }
+  move:smooth_back:
+    tools:
+      - tool: move_axis
+        args: { axis: vertical, value: -0.5, duration: 1.0 }
+  move:smooth_left:
+    tools:
+      - tool: move_axis
+        args: { axis: horizontal, value: -0.5, duration: 0.8 }
+  move:smooth_right:
+    tools:
+      - tool: move_axis
+        args: { axis: horizontal, value: 0.5, duration: 0.8 }
+  # move:back —— LLM 常说"后退/back"而非"backward"，补别名防映射未命中（走离散工具，
+  # 与 move:backward 完全一致）。
+  move:back:
+    tools:
+      - tool: move_avatar
+        args: { direction: backward, duration: 0.8 }
+
+  # ---- 模拟（轴）转向 look:tilt_*/pan_* → look_axis ----
+  # 与上面离散的 look:left/right/up/down（look_direction 按键式）区别：
+  #   look_axis 走 /input/LookHorizontal、/input/LookVertical 浮点轴，
+  #   转向速度 = value 大小，转过角度 ≈ 速度 × duration，比按键式更可控且无
+  #   tryButtonLook 的 (duration+2)*100ms 换算坑（见上文 look 段注释）。
+  # ⚠️ 命名刻意区分于已有离散 look:up/down/left/right。
+  look:pan_left:
+    tools:
+      - tool: look_axis
+        args: { axis: horizontal, value: -0.6, duration: 0.5 }
+  look:pan_right:
+    tools:
+      - tool: look_axis
+        args: { axis: horizontal, value: 0.6, duration: 0.5 }
+  look:tilt_up:
+    tools:
+      - tool: look_axis
+        args: { axis: vertical, value: 0.5, duration: 0.4 }
+  look:tilt_down:
+    tools:
+      - tool: look_axis
+        args: { axis: vertical, value: -0.5, duration: 0.4 }
+
+  # ---- 标准手势 gesture:left_*/right_* → set_gesture ----
+  # 写 VRChat 内置参数 /avatar/parameters/GestureLeft|GestureRight（Int 0-7）。
+  # ⚠️ 官方索引（VRChat SDK 手势枚举，非本项目自定义）：
+  #      0 Neutral / 1 Fist / 2 HandOpen / 3 FingerPoint /
+  #      4 Victory / 5 RockNRoll / 6 HandGun / 7 ThumbsUp
+  #    这是所有 avatar 通用的**标准**参数，无需按 avatar 校准
+  #    （区别于上面 gesture:point/thumbs_up/wave_hand 那组 avatar 自定义参数）。
+  # 持续型：手势会一直保持，直到写回 0 → 各条目配 reset 3 秒后归 Neutral。
+  gesture:left_neutral:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 0 }
+  gesture:left_fist:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 1 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:left_open:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 2 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:left_point:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 3 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:left_peace:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 4 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:left_rock:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 5 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:left_gun:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 6 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:left_thumb:
+    tools:
+      - tool: set_gesture
+        args: { side: left, gesture: 7 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: left, gesture: 0 } }
+  gesture:right_neutral:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 0 }
+  gesture:right_fist:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 1 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+  gesture:right_open:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 2 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+  gesture:right_point:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 3 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+  gesture:right_peace:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 4 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+  gesture:right_rock:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 5 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+  gesture:right_gun:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 6 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+  gesture:right_thumb:
+    tools:
+      - tool: set_gesture
+        args: { side: right, gesture: 7 }
+    reset: { delay: 3.0, tool: set_gesture, args: { side: right, gesture: 0 } }
+
+  # ---- 自身静音 avatar:mute → voice ----
+  # ⚠️ 实现说明（与调研结论的差异，已实测确认）：
+  #    /avatar/parameters/MuteSelf 在 VRChat OSC 里是**只读输出参数**（游戏 → OSC，
+  #    用来告诉外部"我当前是否静音"），往里写不会改变静音状态。真正切换静音的是
+  #    /input/Voice（即已注册的 voice 工具）。因此本条目走 voice，保证实机真的生效。
+  #    若某 avatar 自定义了可写的 MuteSelf 参数，可改回 set_avatar_parameter。
+  avatar:mute:
+    tools:
+      - tool: voice
+        args: {}
+
+# ---- 急停复位命令（问题 1）----
+# 急停（emergency）时统一复位全部持续型动作：清空表情 + 关闭手势参数
+# + 四轴归零 + 保持型按键释放（F-02）。
+# ⚠️ server.js 未注册 reset 工具，旧实现每次急停都 WARNING 刷屏；改为这里
+#    定义真实工具调用。若本表未配置，执行器会回退收集所有条目 reset 命令。
+emergency_reset:
+  tools:
+    - tool: set_emote_parameter
+      args: { value: 0 }
+    - tool: set_avatar_parameter
+      args: { parameter_name: Point, value: false }
+    - tool: set_avatar_parameter
+      args: { parameter_name: ThumbsUp, value: false }
+    - tool: set_avatar_parameter
+      args: { parameter_name: Wave, value: false }
+    # 标准手势归位（Neutral=0）与打字指示器关闭——同属"写入后不会自动复原"的
+    # 持续型状态，急停时必须一并清掉（patch-krekun-osc-expand.js 新增工具）。
+    - tool: set_gesture
+      args: { side: left, gesture: 0 }
+    - tool: set_gesture
+      args: { side: right, gesture: 0 }
+    - tool: set_typing_indicator
+      args: { typing: false }
+    # ---- 四轴归零（F-02）----
+    # ⚠️⚠️ 绝对不能用 send_raw_osc 归零轴：YAML 的 0 / 0.0 经 JSON 传到 JS 都是
+    #      整数 0 → 打成 int32 → VRChat 对 /input/Vertical 这类浮点轴静默丢弃，
+    #      轴永远停不下来（模型持续走/持续转）。必须走 move_axis / look_axis，
+    #      它们内部用 {type:'float', value:0} 强制 float32 类型标签。
+    # ⚠️ duration 不可为 0：0 是 falsy，会回落到默认 0.5s；用 0.05 表示"立刻归零"。
+    - tool: move_axis
+      args: { axis: vertical, value: 0, duration: 0.05 }
+    - tool: move_axis
+      args: { axis: horizontal, value: 0, duration: 0.05 }
+    - tool: look_axis
+      args: { axis: horizontal, value: 0, duration: 0.05 }
+    - tool: look_axis
+      args: { axis: vertical, value: 0, duration: 0.05 }
+    # ---- 保持型按键释放（F-02）----
+    # Grab/Run/Use 是"按下即保持"的按钮：P2 抓握模型会长按 GrabRight 数十秒，
+    # 急停/关闭时必须显式松开，否则模型一直举着东西 / 一直跑。
+    # 按钮是布尔语义的整型开关，int32 的 0 正是 VRChat 期望的松开值，
+    # 因此这里用 send_raw_osc 是安全的（与轴的浮点要求无关）。
+    # hold_ms: 0 = 只发松开值、不再排 press/release 对。
+    - tool: send_raw_osc
+      args: { address: /input/GrabRight, value: 0, hold_ms: 0 }
+    - tool: send_raw_osc
+      args: { address: /input/GrabLeft, value: 0, hold_ms: 0 }
+    - tool: send_raw_osc
+      args: { address: /input/Run, value: 0, hold_ms: 0 }
+    - tool: send_raw_osc
+      args: { address: /input/UseRight, value: 0, hold_ms: 0 }
+    - tool: send_raw_osc
+      args: { address: /input/UseLeft, value: 0, hold_ms: 0 }

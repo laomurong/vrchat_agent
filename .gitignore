@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# 环境变量与密钥
+.env
+
+# 日志
+logs/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+
+# 测试与 QA 开发残留（不推送到远端）
+tests/
+_qa*
+_yan*
+_tmp*
+_baseline*
+_package*
+_r2*
+_byte_check.txt
+_encoding_test.txt
+_hex_check.txt
+_parse*
+_run_final.txt
+_run_v2.txt
+_run_v3.txt
+_test_log.txt
+err3.txt
+import_check.txt
+*.xml
+*.jsonl
+
+# 运行时数据与大文件
+data/
+model/
+deploy-test/
+deploy-vrfy-*/
+*.onnx
+*.pt
+*.bin

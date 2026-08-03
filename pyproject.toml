@@ -1,0 +1,58 @@
+# VRChat 全自主具身 AI Agent — Python 工程声明
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vrchat-agent"
+version = "0.1.0"
+description = "全自主具身 Agent 玩 VRChat（Python 主编排 + Node OSC 桥接）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "软件工程团队" }]
+keywords = ["vrchat", "agent", "osc", "asr", "tts", "llm"]
+
+# 运行时依赖（与 requirements.txt 保持一致）
+dependencies = [
+    "numpy>=1.26.0",            # 音频/图像数组
+    "pydantic>=2.6.0",          # 配置/决策 Schema 校验
+    "PyYAML>=6.0",              # config.yaml
+    "python-dotenv>=1.0.0",     # .env 加载 API keys
+    "openai>=1.30.0",           # OpenAI 兼容 SDK：LLM（文本+视觉）+ 云端 TTS
+    "edge-tts>=6.1.0",          # 本地免费 TTS（双实现之一）
+    "faster-whisper>=1.0.0",    # ASR（CTranslate2，GPU/CPU 均可）
+    "sherpa-onnx>=1.13.4",      # ASR（Dolphin small CTC，engine=dolphin 切换）
+    "webrtcvad-wheels>=2.0.12", # VAD 语音活动检测
+    "sounddevice>=0.4.6",       # 普通麦克风输入 + VB-Audio 输出 [Win]
+    "pyaudiowpatch>=0.2.12",    # WASAPI 回环（电脑内录）[Win]：sounddevice 官方不支持 loopback
+    "obs-websocket-py>=0.9.0",  # OBS WebSocket 取帧 [Win]
+    "opencv-python>=4.9.0",     # 图像处理/JPEG 压缩/虚拟摄像头回退
+    "mss>=9.0.0",               # 指定窗口截图（window_capture 后端）[Win]
+    "mcp>=1.0.0",               # Python MCP SDK（stdio 客户端连 vrchat-mcp-osc）
+    "keyboard>=0.13.5",         # 全局急停快捷键 [Win]
+    "miniaudio>=1.57",          # 音频解码（mp3/wav → float32，无需 ffmpeg）
+    "dashscope>=1.20.0",        # 阿里云 DashScope CosyVoice 云端 TTS（音色克隆）
+    "rich>=13.7.0",             # 终端仪表盘美化（可选）
+    "fastapi>=0.111",           # Web 控制台（M4 增量，W-01/W-02）
+    "uvicorn>=0.30",            # ASGI 服务器（纯 Python；不用 [standard]）
+]
+
+[project.scripts]
+vrchat-agent = "vrchat_agent.main:main_entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"vrchat_agent.web" = ["static/*.html"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
