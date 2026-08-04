@@ -55,14 +55,25 @@ MODULE_SHORT = {
 
 
 class JsonlHandler(logging.Handler):
-    """JSON Lines 文件处理器：每行一条结构化日志。"""
+    """JSON Lines 文件处理器：每行一条结构化日志。
+
+    A-17：构造期一次性打开文件句柄并复用（此前每条 emit 都 ``with open`` 重开，
+    高频日志下开销大）；提供 close() 关闭句柄，setup_logging 清 handlers 时自动
+    关闭旧实例，程序退出由 logging 框架统一 shutdown 调用 close()，不泄漏句柄。
+    """
 
     def __init__(self, path: str | Path) -> None:
         super().__init__()
         self._path = Path(path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        # A-17：句柄在构造期打开并复用（SIM115 忽略——若用 with 会立即关闭，
+        # 正是本修复要避免的"每条日志重开文件"）。
+        self._fh = open(self._path, "a", encoding="utf-8")  # noqa: SIM115
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            if self._fh is None:
+                return  # close() 后不再写（解释器退出时 logging.shutdown 可能再触发）
             entry: dict[str, Any] = {
                 "ts": round(record.created, 3),
                 "level": record.levelname,
@@ -73,11 +84,19 @@ class JsonlHandler(logging.Handler):
             extra = getattr(record, "extra_fields", None)
             if isinstance(extra, dict):
                 entry.update(extra)
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._path, "a", encoding="utf-8") as fh:
-                fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            self._fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            self._fh.flush()
         except Exception:
             self.handleError(record)
+
+    def close(self) -> None:
+        """关闭文件句柄（幂等）。"""
+        try:
+            if self._fh is not None:
+                self._fh.close()
+        finally:
+            self._fh = None
+            super().close()
 
 
 def _short_name(name: str) -> str:
@@ -86,9 +105,17 @@ def _short_name(name: str) -> str:
 
 
 def setup_logging(level: str = "INFO", file: str | Path | None = None, stream: bool = True) -> logging.Logger:
-    """初始化根 logger：可选 JSON Lines 文件 + 控制台输出。"""
+    """初始化根 logger：可选 JSON Lines 文件 + 控制台输出。
+
+    A-17：清 handlers 前先 close 旧实例（JsonlHandler 持有文件句柄，避免泄漏）。
+    """
     root = logging.getLogger("vrchat_agent")
     root.setLevel(level.upper())
+    for old in list(root.handlers):
+        try:
+            old.close()
+        except Exception:
+            pass
     root.handlers.clear()
     root.propagate = False
 

@@ -93,34 +93,74 @@ async def _visual_calibration_loop(
             logger.info("校准完成：目标「%s」已居中（第 %d 次）", target_desc, i + 1)
             return
 
-        # 5) 构造微调动作（look:pan_*/tilt_*，平滑小幅转动）
+        # 5) 构造微调动作（look:pan_*/tilt_*，按 LLM 返回偏移角度缩放 value/duration）
+        # A-15：此前 degrees 解析后丢弃、只用固定步长，收敛慢。现将 degrees 映射到
+        # look_axis 的 value/duration（direction 由 offset 决定），按实际偏移量调整
+        # 转幅，收敛更快；max_iterations 仍兜底。
+        deg = max(0.0, float(degrees))
+        axis_value = min(0.3 + deg * 0.03, 1.0)          # 偏移越大转幅越大（封顶 1.0）
+        axis_duration = 0.4 + min(deg, 30.0) * 0.01      # 偏移越大按住越久（封顶 ~0.7s）
         actions: list[Action] = []
         if offset_h == "left":
-            actions.append(Action(kind="look", params={"name": "pan_left"}, priority=5))
+            actions.append(Action(
+                kind="look",
+                params={"name": "pan_left", "value": round(axis_value, 3), "duration": round(axis_duration, 3)},
+                priority=5,
+            ))
         elif offset_h == "right":
-            actions.append(Action(kind="look", params={"name": "pan_right"}, priority=5))
+            actions.append(Action(
+                kind="look",
+                params={"name": "pan_right", "value": round(axis_value, 3), "duration": round(axis_duration, 3)},
+                priority=5,
+            ))
 
         if offset_v == "up":
-            actions.append(Action(kind="look", params={"name": "tilt_down"}, priority=5))
+            actions.append(Action(
+                kind="look",
+                params={"name": "tilt_down", "value": round(axis_value, 3), "duration": round(axis_duration, 3)},
+                priority=5,
+            ))
         elif offset_v == "down":
-            actions.append(Action(kind="look", params={"name": "tilt_up"}, priority=5))
+            actions.append(Action(
+                kind="look",
+                params={"name": "tilt_up", "value": round(axis_value, 3), "duration": round(axis_duration, 3)},
+                priority=5,
+            ))
 
         if not actions:
             logger.info("校准完成：无明确偏移方向（第 %d 次）", i + 1)
             return
 
         logger.info(
-            "校准微调: offset_h=%s offset_v=%s degrees=%d actions=%s",
+            "校准微调: offset_h=%s offset_v=%s degrees=%d value=%.3f duration=%.3fs actions=%s",
             offset_h,
             offset_v,
             degrees,
+            axis_value,
+            axis_duration,
             [a.params.get("name") for a in actions],
         )
 
-        # 6) 执行微调（顺序执行，保证水平/垂直不冲突）
+        # 6) 执行微调（顺序执行，保证水平/垂直不冲突）。
+        #    A-15：优先走 actuator._call_tool_safe("look_axis", ...) 直接下发按 degrees
+        #    缩放后的 value/duration（MCPOSCActuator 提供）；NoopActuator（桥接降级）
+        #    无此方法 → 回退 execute(语义动作，固定步长)，保证两型执行器都不崩溃。
         try:
+            look_caller = getattr(actuator, "_call_tool_safe", None)
             for action in actions:
-                await actuator.execute(action)
+                if look_caller is not None:
+                    name = action.params.get("name")
+                    # 与 mappings/avatar_default.yaml 的 look:pan_*/tilt_* 符号约定一致：
+                    # pan_left / tilt_down 为负，pan_right / tilt_up 为正。
+                    sign = -1.0 if name in ("pan_left", "tilt_down") else 1.0
+                    axis = "horizontal" if name in ("pan_left", "pan_right") else "vertical"
+                    await look_caller("look_axis", {
+                        "axis": axis,
+                        "value": round(sign * axis_value, 3),
+                        "duration": round(axis_duration, 3),
+                    })
+                else:
+                    await actuator.execute(action)
         except Exception as exc:
             logger.warning("校准动作执行失败: %s", exc)
             return
