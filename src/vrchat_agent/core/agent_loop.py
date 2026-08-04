@@ -263,6 +263,26 @@ class AgentLoop:
             except Exception:
                 logger.warning("空闲本能初始化失败，禁用", exc_info=True)
 
+        # 空间导航（任务④）：config.nav.enabled 时懒装配 NavController。
+        # 懒加载：构造只保存引用，首次 nav 动作/空闲探索才建 DB 与组件；
+        # 未配置/未启用 → None（所有 nav 分支安全空转，不改变既有行为）。
+        self._nav = None
+        if self._config is not None:
+            try:
+                if getattr(self._config, "nav", None) is not None and self._config.nav.enabled:
+                    from ..nav import NavController
+
+                    self._nav = NavController(
+                        config=self._config,
+                        actuator=self._actuator,
+                        sampler=self._sampler,
+                        vision=self._vision,
+                    )
+                    logger.info("空间导航已初始化（enabled=true）")
+            except Exception:
+                self._nav = None
+                logger.warning("空间导航初始化失败，禁用", exc_info=True)
+
     # ------------------------------------------------------------------
     # 只读属性（供仪表盘/测试）
     # ------------------------------------------------------------------
@@ -412,9 +432,12 @@ class AgentLoop:
         self._stop_event.set()
 
     async def close(self) -> None:
-        """关闭主循环：停止空闲本能 + 设置停止事件。"""
+        """关闭主循环：停止空闲本能/空闲探索 + 释放 nav 资源 + 设置停止事件。"""
         if self._idle_instinct is not None:
             await self._idle_instinct.stop()
+        if self._nav is not None:
+            self._nav.stop_idle()
+            self._nav.close()
         self.stop()
 
     async def _consume(self, event_type: str, handler) -> None:
@@ -448,9 +471,11 @@ class AgentLoop:
         P0 重构：不再阻塞等待锁。ASR 产出直接进 LLM Stage（通过 Semaphore 限流）。
         打断/急停通过 Utterance.cancel_event 精准取消。
         """
-        # 新 utterance 到来 → 打断空闲本能
+        # 新 utterance 到来 → 打断空闲本能 / 空闲探索（任务④）
         if self._idle_instinct is not None:
             await self._idle_instinct.stop()
+        if self._nav is not None:
+            self._nav.stop_idle()
 
         if self._paused:
             logger.debug("主循环暂停中，忽略语音触发")
@@ -549,9 +574,11 @@ class AgentLoop:
         LLM/TTS 通过 Semaphore 限流（可配置并发数）。
         错误隔离：单条失败不影响其他 utterance。
         """
-        # 有新的 pipeline 任务 → 停止空闲本能
+        # 有新的 pipeline 任务 → 停止空闲本能 / 空闲探索（任务④）
         if self._idle_instinct is not None:
             await self._idle_instinct.stop()
+        if self._nav is not None:
+            self._nav.stop_idle()
 
         try:
             # ---- 阶段 0：检查取消 ----
@@ -802,8 +829,17 @@ class AgentLoop:
         ):
             if self._state in (AgentState.THINKING, AgentState.SPEAKING, AgentState.ACTION):
                 self._transition(AgentState.IDLE)
-                # 进入 IDLE 后启动空闲本能微动作循环（A-07：任务纳入跟踪）
-                if self._idle_instinct is not None:
+                # 进入 IDLE 后启动空闲行为（任务④：nav 探索优先于 idle_instinct）：
+                # - NavController.maybe_explore_coro() 返回探索协程 → 启动探索
+                #   （nav 探索激活时 idle_instinct 的随机微动让位）；
+                # - 否则回退启动空闲本能微动作循环（A-07：任务纳入跟踪）。
+                explore_coro = None
+                if self._nav is not None:
+                    explore_coro = self._nav.maybe_explore_coro()
+                if explore_coro is not None:
+                    self._idle_task = asyncio.create_task(explore_coro)
+                    logger.info("空闲：启动空间导航探索（nav 优先于 idle_instinct）")
+                elif self._idle_instinct is not None:
                     self._idle_task = asyncio.create_task(self._idle_instinct.start())
 
     # ------------------------------------------------------------------
@@ -847,9 +883,11 @@ class AgentLoop:
         """
         if self._state == AgentState.EMERGENCY_STOP:
             return
-        # 急停 → 停止空闲本能
+        # 急停 → 停止空闲本能 / 空闲探索（任务④）
         if self._idle_instinct is not None:
             await self._idle_instinct.stop()
+        if self._nav is not None:
+            self._nav.stop_idle()
         logger.warning("执行急停: 取消所有飞行中任务 + 静音输出 + 复位动作", extra={"event": "emergency_stop"})
         self._emergency_stopped = True
         # 需求 4：急停清空对话队列（丢弃未处理对话）
@@ -1089,6 +1127,24 @@ class AgentLoop:
             if self._emergency_stopped:
                 logger.warning("急停：跳过剩余动作", extra={"event": "emergency_stop"})
                 break
+            # 任务④：nav 动作由 NavController 拦截执行（拓扑导航），不下发 actuator
+            if action.kind == "nav":
+                if self._nav is not None:
+                    try:
+                        await self._nav.handle_action(action)
+                        self._bus.publish(
+                            Event(
+                                EventType.ACTION_EXECUTED.value,
+                                {"kind": action.kind, "params": action.params, "priority": action.priority},
+                            )
+                        )
+                        continue
+                    except Exception as exc:
+                        logger.error("nav 动作执行失败 %s: %s", action.kind, exc,
+                                     extra={"event": "action_failed"})
+                        continue
+                logger.warning("nav 动作被忽略：空间导航未启用", extra={"event": "action_failed"})
+                continue
             try:
                 await asyncio.wait_for(self._actuator.execute(action), timeout=timeout)
                 self._bus.publish(

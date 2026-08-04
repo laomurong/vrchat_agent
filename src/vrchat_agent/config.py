@@ -427,6 +427,29 @@ class VRCApiConfig(BaseModel):
     rate_limit_seconds: float = 60.0
 
 
+class NavConfig(BaseModel):
+    """空间导航配置（nav 节，任务④：拓扑导航）。
+
+    核心约束：VRChat OSC 无绝对坐标 → 只能拓扑导航（节点=视觉地标指纹，
+    边=相对动作序列），每步重定位防累积误差。
+
+    - enabled：总开关（false 时 NavController 空转，所有接口安全降级）；
+    - db_path：拓扑图 SQLite 文件（相对项目根；data/ 已 gitignore，不入 git）；
+    - fingerprint_size：指纹灰度池化边长（默认 32，特征向量 = size²+12 维）；
+    - similarity_threshold：指纹匹配/回环阈值（[0,1]，越大越严格）；
+    - explore_interval_s：空闲探索最小间隔（秒，节流防频繁挪动）；
+    - max_relocalize_attempts：每步重定位最大重试次数（超限放弃该边）。
+    属装配期读取（改后需重启）；无明文 key。
+    """
+
+    enabled: bool = False
+    db_path: str = "data/nav_topology.db"
+    fingerprint_size: int = 32
+    similarity_threshold: float = 0.85
+    explore_interval_s: float = 30.0
+    max_relocalize_attempts: int = 3
+
+
 class AppConfig(BaseModel):
     """全量配置模型（顶层）。"""
 
@@ -442,6 +465,7 @@ class AppConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     web: WebConfig = Field(default_factory=WebConfig)
     vrcapi: VRCApiConfig = Field(default_factory=VRCApiConfig)
+    nav: NavConfig = Field(default_factory=NavConfig)
 
 
 # ---------------------------------------------------------------------------

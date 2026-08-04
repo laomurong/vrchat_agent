@@ -62,7 +62,14 @@ _ACTION_KINDS = (
     "set_status=更新在线状态（params.status 取 active/join me/busy/ask me/offline，"
     "如「设置成忙碌」→ {\"kind\":\"vrc\",\"params\":{\"name\":\"set_status\",\"status\":\"busy\"}}）；"
     "⚠️ vrc 动作是真实网络请求且受 VRChat API 限速（约 1 次/分钟），只在玩家明确要求"
-    "「换头像/查好友/找世界/改状态」时输出，且一次只输出一个 vrc 动作)"
+    "「换头像/查好友/找世界/改状态」时输出，且一次只输出一个 vrc 动作) / "
+    "nav(空间导航(拓扑导航，VRChat OSC 无绝对坐标，只能相对转向+移动+视觉重定位)："
+    "goto=去往某处——params.target 填地标描述（如「去喷泉那里」→ "
+    "{\"kind\":\"nav\",\"params\":{\"name\":\"goto\",\"target\":\"喷泉\"}}；"
+    "不带 target 则返回最近已知位置)；"
+    "explore=自主探索世界——向未访问方向移动并记录新地标，"
+    "适合「探索一下」「到处走走」「看看那边有什么」→ "
+    "{\"kind\":\"nav\",\"params\":{\"name\":\"explore\"}})"
 )
 
 

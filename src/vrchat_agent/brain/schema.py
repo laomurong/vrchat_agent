@@ -27,8 +27,14 @@ logger = logging.getLogger("vrchat_agent.brain.schema")
 #   params.name 取 change_avatar/list_friends/search_world/set_status，
 #   由 mappings/avatar_default.yaml 的 vrc:* 条目映射到 vrc_* 工具，
 #   经 action/mcp_actuator.py 委托 vrcapi/actions.py 执行（异步 + 限速）。
+# - nav：空间导航（任务④）——拓扑导航（VRChat OSC 无绝对坐标，只能
+#   节点=视觉地标指纹 + 边=相对动作序列），由 AgentLoop._execute_actions
+#   拦截交给 nav.NavController 执行（不走 actuator/MCP）。
+#   params.name 取 goto（去往某处，params.target 填地标描述）/
+#   explore（自主探索世界）；mappings/avatar_default.yaml 的 nav:* 条目
+#   仅作文档占位（伪工具 nav_goto/nav_explore，正常不流入 actuator）。
 ActionKind = Literal[
-    "emote", "gesture", "move", "jump", "look", "pose", "chatbox", "input", "avatar", "vrc"
+    "emote", "gesture", "move", "jump", "look", "pose", "chatbox", "input", "avatar", "vrc", "nav"
 ]
 
 

@@ -536,6 +536,23 @@ actions:
       - tool: vrc_set_status
         args: { status: "{status}" }
 
+  # ---- 空间导航 nav:* → 伪工具（任务④，AgentLoop 拦截，不真正发 OSC）----
+  # ⚠️ nav:* 不映射到任何 OSC/MCP 工具：AgentLoop._execute_actions 会拦截
+  #    kind=nav 的动作交给 nav.NavController（planner/explorer）处理——
+  #    goto 走 BFS 路径规划 + 每步重定位，explore 走自主探索登记新节点。
+  #    这里保留条目仅为：① 与 schema.ActionKind 白名单精确对齐
+  #    （test_qa_oscexpand_schema_kinds_match_mapping_kinds 断言两者相等）；
+  #    ② 防止 nav 动作意外泄漏到 actuator 时 ActionMapper 刷"未找到映射"。
+  #    若绕过主循环直接执行，MCP 会因工具不存在而报错（被上层捕获，不崩溃）。
+  nav:goto:
+    tools:
+      - tool: nav_goto
+        args: { target: "{target}" }
+  nav:explore:
+    tools:
+      - tool: nav_explore
+        args: {}
+
 # ---- 急停复位命令（问题 1）----
 # 急停（emergency）时统一复位全部持续型动作：清空表情 + 关闭手势参数
 # + 四轴归零 + 保持型按键释放（F-02）。

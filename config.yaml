@@ -182,3 +182,13 @@ vrcapi:
   password_env: VRC_PASSWORD
   api_key_env: VRC_API_KEY
   rate_limit_seconds: 60.0
+nav:
+  # 空间导航（任务④：拓扑导航——VRChat OSC 无绝对坐标，只能
+  # 节点=视觉地标指纹 + 边=相对动作序列，每步重定位防累积误差）。
+  # 拓扑图存 data/nav_topology.db（data/ 已 gitignore，不入 git）。
+  enabled: true
+  db_path: data/nav_topology.db
+  fingerprint_size: 32
+  similarity_threshold: 0.85
+  explore_interval_s: 30.0
+  max_relocalize_attempts: 3
