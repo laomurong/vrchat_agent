@@ -53,7 +53,16 @@ _ACTION_KINDS = (
     "{\"kind\":\"input\",\"params\":{\"name\":\"grab_right\"}}) / "
     "chatbox(聊天框: greet/bye；typing=显示「正在输入」气泡；"
     "回复内容会自动同步到聊天框，无需输出 reply) / "
-    "avatar(自身状态: mute=切换麦克风静音)"
+    "avatar(自身状态: mute=切换麦克风静音) / "
+    "vrc(VRChat API 集成（联网操作，需账号已配置且已登录，执行较慢约几十秒级）："
+    "change_avatar=换头像（params 需带 avatar_id，形如 avtr_xxx）；"
+    "list_friends=查好友列表；"
+    "search_world=搜索世界/房间（params 可带 query 关键词，如「搜一下日本刀相关世界」→ "
+    "{\"kind\":\"vrc\",\"params\":{\"name\":\"search_world\",\"query\":\"japan\"}}）；"
+    "set_status=更新在线状态（params.status 取 active/join me/busy/ask me/offline，"
+    "如「设置成忙碌」→ {\"kind\":\"vrc\",\"params\":{\"name\":\"set_status\",\"status\":\"busy\"}}）；"
+    "⚠️ vrc 动作是真实网络请求且受 VRChat API 限速（约 1 次/分钟），只在玩家明确要求"
+    "「换头像/查好友/找世界/改状态」时输出，且一次只输出一个 vrc 动作)"
 )
 
 

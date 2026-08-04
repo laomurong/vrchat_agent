@@ -23,8 +23,12 @@ logger = logging.getLogger("vrchat_agent.brain.schema")
 #    并在 brain/prompts.py 的 _ACTION_KINDS 里向 LLM 说明。
 # - input：/input/* 交互按钮（run/use_right/grab_left/sit_stand/afk/panic/quick_menu 等）
 # - avatar：写 avatar 自身状态（mute 等）
+# - vrc：VRChat API 集成（任务①）——换头像/查好友/找世界/更新状态，
+#   params.name 取 change_avatar/list_friends/search_world/set_status，
+#   由 mappings/avatar_default.yaml 的 vrc:* 条目映射到 vrc_* 工具，
+#   经 action/mcp_actuator.py 委托 vrcapi/actions.py 执行（异步 + 限速）。
 ActionKind = Literal[
-    "emote", "gesture", "move", "jump", "look", "pose", "chatbox", "input", "avatar"
+    "emote", "gesture", "move", "jump", "look", "pose", "chatbox", "input", "avatar", "vrc"
 ]
 
 

@@ -57,12 +57,15 @@ class MCPOSCActuator(Actuator):
         mapper: ActionMapper | None = None,
         auto_reset: bool = True,
         reset_budget: float = DEFAULT_RESET_BUDGET,
+        vrc_executor=None,
     ) -> None:
         self._client = client
         self._mapper = mapper or ActionMapper()
         self._auto_reset = auto_reset
         # 急停复位命令循环的整体时间预算（Y-01）；<=0 视为不限预算。
         self._reset_budget: float = reset_budget
+        # VRChat API 执行器（任务①：vrc_* 工具委托，可选注入；None 时 vrc 动作报错）
+        self._vrc_executor = vrc_executor
         # 自动复位后台任务表：key=映射查找键 kind:name（F-03）。
         # 用 kind 做键会让"同 kind 不同通道"互相取消（如 gesture:peace_left 与
         # gesture:peace_right），先触发的那只手永远不复位；改用 resolve_key 分槽。
@@ -129,6 +132,10 @@ class MCPOSCActuator(Actuator):
                 # 不调用 MCP（send_key 不是 server.js 注册的工具）。
                 await self._send_key(cmd)
                 continue
+            if cmd.tool.startswith("vrc_"):
+                # 任务①：vrc_* 工具 → VRChat API 执行器（异步限速，不走 OSC 桥接）
+                await self._execute_vrc_tool(cmd)
+                continue
             try:
                 result = await self._client.call_tool(cmd.tool, cmd.args)
             except Exception as exc:
@@ -156,6 +163,28 @@ class MCPOSCActuator(Actuator):
             if spec is not None and spec.tools:
                 # F-03：按 kind:name 分槽，避免同 kind 不同通道互相取消复位。
                 self._schedule_reset(self._mapper.resolve_key(action), spec)
+
+    async def _execute_vrc_tool(self, cmd: OSCCommand) -> None:
+        """执行一条 VRChat API 工具（``tool: vrc_*``，任务①）。
+
+        映射表把 ``vrc:change_avatar`` 等解析为 ``vrc_*`` 工具命令，本方法
+        委托 vrcapi.actions.VRCActionExecutor 执行（异步限速 + to_thread，
+        不阻塞事件循环）。未注入执行器（vrcapi 未启用）→ 明确报错提示配置。
+        """
+        if self._vrc_executor is None:
+            logger.warning(
+                "vrc 工具 %s 未配置 vrc_executor（请在 config.yaml 启用 vrcapi 节）",
+                cmd.tool,
+            )
+            raise ActuatorError(
+                f"vrc 工具 {cmd.tool} 需要 vrcapi 执行器（config.vrcapi.enabled）"
+            )
+        try:
+            result = await self._vrc_executor.run(cmd.tool, cmd.args)
+        except Exception as exc:
+            logger.warning("VRChat API 工具调用失败 %s: %s", cmd.tool, exc)
+            raise ActuatorError(f"VRChat API 工具调用失败 {cmd.tool}: {exc}") from exc
+        logger.debug("VRChat API 工具调用成功: %s -> %s", cmd.tool, result)
 
     async def _send_key(self, cmd: OSCCommand) -> None:
         """执行一条键盘注入命令（``tool: send_key``）。

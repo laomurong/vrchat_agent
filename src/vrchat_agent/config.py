@@ -385,6 +385,24 @@ class WebConfig(BaseModel):
     auto_open_browser: bool = True  # 启动后自动打开默认浏览器
 
 
+class VRCApiConfig(BaseModel):
+    """VRChat API 集成配置（vrcapi 节，任务①：换头像/查好友/找世界/更新状态）。
+
+    - 凭据一律走环境变量（默认 VRC_USERNAME / VRC_PASSWORD / VRC_API_KEY），
+      **绝不写明文**到 config.yaml / 代码；VRCAPIClient 懒加载——首次使用时
+      才读环境变量并登录，未配置/未使用不触发任何登录；
+    - enabled：总开关（false 时动作映射 vrc:* 仍可解析，执行时报清晰错误）；
+    - rate_limit_seconds：VRChat API 请求最小间隔（官方对单账号请求频率敏感，
+      默认 60 秒/请求，全局串行节流）。
+    """
+
+    enabled: bool = True
+    username_env: str = "VRC_USERNAME"
+    password_env: str = "VRC_PASSWORD"
+    api_key_env: str = "VRC_API_KEY"
+    rate_limit_seconds: float = 60.0
+
+
 class AppConfig(BaseModel):
     """全量配置模型（顶层）。"""
 
@@ -399,6 +417,7 @@ class AppConfig(BaseModel):
     emergency: EmergencyConfig = Field(default_factory=EmergencyConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     web: WebConfig = Field(default_factory=WebConfig)
+    vrcapi: VRCApiConfig = Field(default_factory=VRCApiConfig)
 
 
 # ---------------------------------------------------------------------------

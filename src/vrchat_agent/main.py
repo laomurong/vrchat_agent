@@ -337,9 +337,27 @@ async def build_and_run(config: Config) -> None:
         args=config.action.bridge.args,
         timeout=config.action.bridge.timeout,
     )
+    # 任务①：VRChat API 执行器（懒加载——构造不登录，首次 vrc 动作才登录；
+    # vrcapi 未启用/未配置时保持 None，vrc 动作执行时报清晰错误）
+    vrc_executor = None
+    try:
+        if config.vrcapi.enabled:
+            from .vrcapi.actions import VRCActionExecutor
+            from .vrcapi.client import VRCAPIClient
+
+            vrc_client = VRCAPIClient(
+                username_env=config.vrcapi.username_env,
+                password_env=config.vrcapi.password_env,
+                api_key_env=config.vrcapi.api_key_env,
+                rate_limit_seconds=config.vrcapi.rate_limit_seconds,
+            )
+            vrc_executor = VRCActionExecutor(vrc_client)
+            logger.info("VRChat API 执行器已就绪（vrc 动作可用，懒加载登录）")
+    except Exception as exc:  # noqa: BLE001 - 初始化失败仅降级（vrc 动作不可用），不阻断启动
+        logger.warning("VRChat API 执行器初始化失败（vrc 动作将不可用）: %s", exc)
     try:
         await mcp.start()
-        actuator = MCPOSCActuator(mcp, mapper)
+        actuator = MCPOSCActuator(mcp, mapper, vrc_executor=vrc_executor)
         logger.info("OSC 桥接已就绪（动作可用）")
     except Exception as exc:
         logger.error("OSC 桥接启动失败，降级为仅语音无动作: %s", exc, extra={"event": "bridge_failed"})
