@@ -170,6 +170,23 @@
   .pipeline-bar .badge-num { color: var(--accent); font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   #btn-skip { margin-left: auto; }
   #btn-skip:disabled { opacity: .45; cursor: not-allowed; }
+  /* ---- 参数页 Tab 切换栏 ---- */
+  .tab-bar {
+    display: flex; gap: 0; margin-bottom: 14px;
+    border-bottom: 2px solid var(--border); overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-btn {
+    padding: 8px 16px; background: transparent; border: none;
+    border-bottom: 2px solid transparent; color: var(--muted);
+    font-size: 13px; cursor: pointer; white-space: nowrap;
+    transition: color .15s, border-color .15s; margin-bottom: -2px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;
+  }
+  .tab-panels { /* wrapper, no extra styling needed */ }
   /* ---- 响应式 ---- */
   @media (max-width: 1100px) {
     .field { grid-template-columns: 180px 1fr auto; }
@@ -265,6 +282,14 @@
           <span class="tag hot">♻ 可热重载</span> 保存后即时生效 ·
           <span class="tag restart">⚠ 需重启</span> 保存后需重启进程生效 ·
           <span class="tag sensitive">🔒 敏感</span> 只读掩码展示（由 .env 管理，P1 支持编辑）
+        </div>
+        <div class="tab-bar" id="config-tab-bar">
+          <button type="button" class="tab-btn active" data-tab="asr">🎙️ 语音识别</button>
+          <button type="button" class="tab-btn" data-tab="speech">🔊 语音合成</button>
+          <button type="button" class="tab-btn" data-tab="brain">🧠 LLM 决策</button>
+          <button type="button" class="tab-btn" data-tab="vision">👁️ 视觉</button>
+          <button type="button" class="tab-btn" data-tab="action">🎮 动作</button>
+          <button type="button" class="tab-btn" data-tab="other">⚙️ 其他</button>
         </div>
         <form id="config-form" autocomplete="off"></form>
         <div id="saveResult"></div>
@@ -856,6 +881,34 @@ let CONFIG_SCHEMA = null;   // { schema, hot_reload, restart_required, sensitive
 let CONFIG_VALUES = null;   // 当前已保存配置（掩码后）
 let formEls = [];           // [{path, el, type}]
 
+// ===========================================================================
+// 参数页 Tab 分组（纯前端排版，不碰表单逻辑）
+// ===========================================================================
+const FORM_TABS = [
+  { id: "asr",    label: "🎙️ 语音识别", keys: ["asr"] },
+  { id: "speech", label: "🔊 语音合成", keys: ["speech"] },
+  { id: "brain",  label: "🧠 LLM 决策", keys: ["brain"] },
+  { id: "vision", label: "👁️ 视觉",     keys: ["vision"] },
+  { id: "action", label: "🎮 动作",     keys: ["action"] },
+  { id: "other",  label: "⚙️ 其他",     keys: ["audio", "agent", "dashboard", "emergency", "logging", "web"] },
+];
+
+function tabIdFromKey(key) {
+  for (const tab of FORM_TABS) {
+    if (tab.keys.includes(key)) return tab.id;
+  }
+  return "other"; // 未来新增节兜底
+}
+
+function switchConfigTab(tabId) {
+  document.querySelectorAll("#config-tab-bar .tab-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tabId);
+  });
+  document.querySelectorAll("[data-tab]").forEach((el) => {
+    el.style.display = el.dataset.tab === tabId ? "" : "none";
+  });
+}
+
 function resolveRef(raw, schema) {
   if (raw && raw.$ref) {
     const key = raw.$ref.replace("#/$defs/", "");
@@ -1252,12 +1305,23 @@ function buildForm() {
   const form = $("config-form");
   form.innerHTML = "";
   formEls = [];
+  // Tab 面板容器：所有 fieldset 渲染到此处，保持 collectForm() 能遍历全部字段
+  const tabPanels = document.createElement("div");
+  tabPanels.className = "tab-panels";
+  form.appendChild(tabPanels);
   const schema = CONFIG_SCHEMA.schema;
   for (const [key, raw] of Object.entries(schema.properties || {})) {
     const childSchema = resolveRef(raw, schema);
-    if (childSchema.properties) renderSection(key, childSchema, key, form);
-    else renderField(key, childSchema, key, form);
+    if (childSchema.properties) renderSection(key, childSchema, key, tabPanels);
+    else renderField(key, childSchema, key, tabPanels);
+    // 给顶层 fieldset 打上所属 tab 标记（嵌套 fieldset 在父级内，随父级显隐）
+    const lastChild = tabPanels.lastElementChild;
+    if (lastChild && lastChild.tagName === "FIELDSET") {
+      lastChild.dataset.tab = tabIdFromKey(key);
+    }
   }
+  // 默认激活第一个 tab
+  switchConfigTab(FORM_TABS[0].id);
 }
 
 function collectForm() {
@@ -1604,6 +1668,10 @@ function switchPage(name) {
 
 document.querySelectorAll("nav button:not(:disabled)").forEach((btn) => {
   btn.addEventListener("click", () => switchPage(btn.dataset.page));
+});
+// Tab 切换按钮
+document.querySelectorAll("#config-tab-bar .tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => switchConfigTab(btn.dataset.tab));
 });
 $("btn-save").addEventListener("click", saveConfig);
 $("btn-reset").addEventListener("click", async () => {
