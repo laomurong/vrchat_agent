@@ -115,7 +115,8 @@ def build_decision_instruction() -> str:
   （动作是一条条依次执行的，两者不会同时生效）。
 - 手势优先用标准手势（gesture:right_peace 等，所有 avatar 都支持）；
   avatar 自定义手势（point/thumbs_up/wave_hand）只在明确需要时用。
-- input:panic 会强制开启安全模式、影响很大，只有玩家明确要求"屏蔽所有人/紧急"时才输出。"""
+- input:panic 会强制开启安全模式、影响很大，只有玩家明确要求"屏蔽所有人/紧急"时才输出。
+- 你的回复文本中不要使用颜文字（如 (๑•́ ₃ •̀๑)）或 emoji，因为语音合成会尝试读出它们、产生怪声。可以用中文拟声词代替（如"喵"、"嘿嘿"、"哈哈"）。"""
 
 
 def build_calibration_prompt(

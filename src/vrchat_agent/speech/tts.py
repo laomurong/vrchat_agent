@@ -8,6 +8,7 @@ decode_audio_bytes：用 miniaudio 把 mp3/wav 字节解码为 AudioClip。
 from __future__ import annotations
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -15,6 +16,86 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 logger = logging.getLogger("vrchat_agent.speech.tts")
+
+# ── TTS 文本清洗 ──────────────────────────────────────────────
+# LLM 回复中可能混入颜文字/emoji/特殊 Unicode 符号，直接送入 TTS 合成会产生怪声。
+# 本函数在合成前过滤掉非语音字符，只保留 TTS 能正常朗读的内容。
+#
+# 策略：按 Unicode 码点范围白名单。相比 unicodedata.category（如 Nd 会误放泰文数字
+# ๐-๙），精确码点范围能可靠区分"TTS 可朗读的字符"与"颜文字/emoji 的视觉装饰字符"。
+#
+# 保留范围：
+#   - ASCII 可打印 (U+0020–U+007E)：拉丁字母、数字、英文标点、空格
+#   - CJK 统一表意文字 (U+3400–U+9FFF, U+20000–U+323AF)
+#   - CJK 兼容表意文字 (U+F900–U+FAFF)
+#   - CJK 符号与标点 (U+3000–U+303F)：、。〃々〜 etc.
+#   - 全角标点 (U+FF01–U+FF5E)：！～ etc.
+#   - CJK 兼容形式 (U+FE30–U+FE4F)：纵向标点变体
+#   - 常用例外：EM DASH — (U+2014)、EN DASH – (U+2013)、省略号 … (U+2026)
+
+# 注意：此集合用于 O(1) 行尾检查，实际过滤逻辑基于码点范围而非集合。
+_TTS_RETAIN_NEWLINE = frozenset({"\n", "\r"})
+
+
+def _clean_tts_text(text: str) -> str:
+    """清洗 TTS 输入文本：移除颜文字/emoji/特殊 Unicode 符号。
+
+    保留：中文、拉丁字母、数字、常见中英文标点、空格/换行。
+    移除：emoji（U+1F300+）、颜文字特殊字符（Thai 字母/数字、声调修饰符、
+          零宽字符、组合变音符、装饰符号等）、其他非语音 Unicode block。
+
+    若全部被过滤则返回空字符串，由调用方空检查兜底。
+    """
+    if not text:
+        return ""
+    chars: list[str] = []
+    for ch in text:
+        cp = ord(ch)
+        # ── 白名单：按码点范围 ──
+        # ASCII 可打印 (space U+0020 ~ U+007E)
+        if 0x0020 <= cp <= 0x007E:
+            chars.append(ch)
+            continue
+        # CJK 统一表意文字 (U+3400–U+9FFF 覆盖 Extension A + 基本区)
+        if 0x3400 <= cp <= 0x9FFF:
+            chars.append(ch)
+            continue
+        # CJK 统一表意文字 Extension B–H (U+20000–U+323AF)
+        if 0x20000 <= cp <= 0x323AF:
+            chars.append(ch)
+            continue
+        # CJK 兼容表意文字 (U+F900–U+FAFF)
+        if 0xF900 <= cp <= 0xFAFF:
+            chars.append(ch)
+            continue
+        # CJK 符号与标点 (U+3000–U+303F)：、。〃々〜 etc.
+        if 0x3000 <= cp <= 0x303F:
+            chars.append(ch)
+            continue
+        # 全角标点 (U+FF01 ！–U+FF5E ～)
+        if 0xFF01 <= cp <= 0xFF5E:
+            chars.append(ch)
+            continue
+        # CJK 兼容形式 (U+FE30–U+FE4F)：纵向标点变体
+        if 0xFE30 <= cp <= 0xFE4F:
+            chars.append(ch)
+            continue
+        # 常见中英文排版例外：— (EM DASH) / – (EN DASH) / … (省略号)
+        if cp in (0x2014, 0x2013, 0x2026):
+            chars.append(ch)
+            continue
+        # 保留换行符（Cc 类别例外；后续 \s+ 合并会归一化）
+        if ch in _TTS_RETAIN_NEWLINE:
+            chars.append(ch)
+        # 其余字符（emoji、颜文字装饰符、Thai、零宽等）→ 丢弃
+    cleaned = "".join(chars)
+    # 后处理：移除被掏空的括号对（颜文字被过滤后残留的空括号/纯符号括号，
+    # 如 "( )"、"(*^^*)"、"（）"），这些送入 TTS 会产生无意义音节。
+    cleaned = re.sub(r"\([^\w]*\)", "", cleaned)
+    cleaned = re.sub(r"（[^\w]*）", "", cleaned)
+    # 去首尾空白并合并多余空格
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 class TTSError(RuntimeError):
@@ -118,6 +199,7 @@ class FallbackTTSEngine(TTSEngine):
         return self._fallback
 
     async def synthesize(self, text: str, emotion: str | None = None) -> AudioClip:
+        text = _clean_tts_text(text)
         if not text or not text.strip():
             raise TTSError("TTS 文本为空")
         try:
