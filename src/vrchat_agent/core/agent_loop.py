@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
+import unicodedata
 from enum import Enum
 
 import numpy as np
@@ -76,6 +78,74 @@ def _should_attach_vision(text: str, mode: str) -> bool:
         return True
     low = (text or "").lower()
     return any(k in low for k in _VISION_KEYWORDS)
+
+
+def _is_noise_text(text: str) -> bool:
+    """判断 ASR 文本是否为纯噪音（标点/符号/空白/无意义短数字）。
+
+    规则（命中任一即判定为噪音）：
+    1. 纯标点/空白/符号/控制字符 → True（如 "."、"。"、"！"、"…"、"、"）
+    2. strip 标点/符号后真实字符数 < 2 → True（如 "，。" → 0 字；"，好的" → 2 字放行）
+    3. 仅含数字（无字母/CJK）且数字位数 < 5 → True（如 "123"、"1.2.3" 无用）
+    4. 其余 → False（正常文本放行）
+    """
+    text = text.strip()
+    if not text:
+        return True
+
+    # 规则 1：纯标点/空白/符号/控制字符
+    if all(unicodedata.category(ch).startswith(('P', 'Z', 'S', 'C')) for ch in text):
+        return True
+
+    # 提取真实字符：字母（含 CJK）和数字
+    real_chars = [ch for ch in text if unicodedata.category(ch).startswith(('L', 'N'))]
+
+    # 规则 2：真实字符数 < 2
+    if len(real_chars) < 2:
+        return True
+
+    # 规则 3：仅数字（无字母/CJK）且位数 < 5
+    if all(unicodedata.category(ch).startswith('N') for ch in real_chars) and len(real_chars) < 5:
+        return True
+
+    return False
+
+
+def _is_connection_error(exc: BaseException) -> bool:
+    """检查异常链中是否包含连接级错误（网络不可达、连接拒绝等）。
+
+    连接错误 → 静默跳过（不是"没听清"而是"连不上"）。
+    内容错误（rate limit / 内容过滤等）→ 保留降级。
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None:
+        if id(current) in seen:
+            break
+        seen.add(id(current))
+        cls_name = type(current).__name__
+
+        # httpx connection errors
+        if cls_name in (
+            'ConnectError', 'ConnectTimeout', 'RemoteProtocolError',
+            'NetworkError', 'ReadError', 'WriteError', 'ReadTimeout',
+            'PoolTimeout', 'WriteTimeout',
+        ):
+            return True
+        # openai connection errors
+        if cls_name == 'APIConnectionError':
+            return True
+        # stdlib connection errors
+        if cls_name in (
+            'ConnectionError', 'ConnectionRefusedError',
+            'ConnectionResetError', 'ConnectionAbortedError',
+            'BrokenPipeError',
+        ):
+            return True
+
+        current = current.__cause__ or current.__context__
+
+    return False
 
 
 class AgentState(Enum):
@@ -350,6 +420,9 @@ class AgentLoop:
         text = (event.payload.get("text") or "").strip()
         if not text:
             return
+        if _is_noise_text(text):
+            logger.debug("ASR 噪音过滤: '%s'（纯标点/符号/无意义短文本）", text, extra={"event": "asr_noise_filtered"})
+            return
         self._last_utterance = text
 
         # ---- P1-5：ASR 去重 ----
@@ -478,10 +551,16 @@ class AgentLoop:
                     logger.error("LLM 决策超时 (%.1fs)", timeout, extra={"event": "llm_timeout"})
                     decision = Decision(respond=False, reply_text=None, actions=[])
                     await self._degrade()
-                except Exception:
+                except Exception as exc:
                     logger.exception("LLM 决策失败", extra={"event": "llm_error"})
                     decision = Decision(respond=False, reply_text=None, actions=[])
-                    await self._degrade()
+                    if _is_connection_error(exc):
+                        logger.warning(
+                            "LLM 连接失败，静默跳过（网络不可达，非内容错误）",
+                            extra={"event": "llm_connection_error"},
+                        )
+                    else:
+                        await self._degrade()
 
             utt.decision = decision
             utt.state = UtteranceState.LLM_DONE
