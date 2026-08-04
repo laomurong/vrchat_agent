@@ -1052,7 +1052,30 @@ const PHASE_LABELS = {
 function fieldLabel(key, path) {
   if (path && FIELD_LABELS[path]) return FIELD_LABELS[path];
   if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+  // 兜底：读 CONFIG_SCHEMA 里的 title（pydantic Field(title="...")）
+  const t = titleFromSchema(key, path);
+  if (t) return t;
   return key;
+}
+
+// 从 JSON Schema 中按 dotted path 查找字段/分组的 title。
+// pydantic v2 的 schema 中嵌套模型均为 $ref（如 agent -> #/$defs/AgentConfig），
+// 因此每一步都要用 resolveRef() 解引用后才能继续下钻。
+function titleFromSchema(key, path) {
+  if (!CONFIG_SCHEMA || !CONFIG_SCHEMA.schema) return null;
+  const root = CONFIG_SCHEMA.schema;
+  const segs = (path || key).split(".");
+  let node = root;
+  for (const s of segs) {
+    if (!node || typeof node !== "object") return null;
+    node = resolveRef(node, root);
+    if (!node || typeof node.properties !== "object") return null;
+    if (!Object.prototype.hasOwnProperty.call(node.properties, s)) return null;
+    node = node.properties[s];
+  }
+  node = resolveRef(node, root);
+  if (node && typeof node.title === "string" && node.title) return node.title;
+  return null;
 }
 
 function stateLabel(s) { return STATE_LABELS[s] || s || "空闲"; }
