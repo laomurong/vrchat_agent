@@ -119,9 +119,17 @@ class MCPClient:
 
     async def start(self) -> None:
         """启动 Node 桥接子进程并初始化 MCP 会话。"""
+        # A-18：command 未配置（默认空串）→ 直接给出"请配置"清晰错误，不让用户
+        # 面对晦涩的 ENOENT/超时。config.yaml 已覆盖 action.bridge.command 则不受影响。
+        command = self._command
+        if not command or not str(command).strip():
+            raise MCPError(
+                "未配置 action.bridge.command（OSC 桥接 Node 可执行文件路径）。"
+                "请在 config.yaml 的 action.bridge.command 填写 node.exe 绝对路径"
+                "（如 C:/Program Files/nodejs/node.exe），或安装 Node 后配置为 'node'"
+            )
         # BugFix P1：先做命令可达性预检，给出友好报错（再 import mcp SDK，
         # 让"命令找不到"的错误优先于 SDK 缺失的错误，便于用户定位）。
-        command = self._command
         if not self._is_path_like(command) and shutil.which(command) is None:
             raise MCPError(
                 f"启动 MCP 桥接失败（{command}）: 未找到可执行文件。"

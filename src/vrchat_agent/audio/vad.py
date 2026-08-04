@@ -138,7 +138,9 @@ class SpeechSegmenter:
         try:
             new_min = int(self._config.asr.min_speech_ms)
             new_silence = int(self._config.asr.silence_ms)
-            new_max = int(self._config.asr.max_segment_s)
+            # A-16：max_segment_s 保留 float（如 0.3s）；int() 会把 0.3 截断为 0，
+            # 导致 max_frames=1 → 每帧切段。与 __init__ 的 float() 保持一致。
+            new_max = float(self._config.asr.max_segment_s)
         except Exception:
             new_min, new_silence, new_max = None, None, None
         if new_min is not None and new_min != self._min_speech_ms:

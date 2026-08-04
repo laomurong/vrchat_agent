@@ -94,6 +94,9 @@ HOT_RELOAD_PATHS = {
     "brain.llm.vision_enabled",
     "brain.persona.name",
     "brain.persona.system_prompt",
+    # A-19：brain.vision_mode 实际每次热读（agent_loop._vision_mode() 每次从
+    # config.brain.vision_mode 读取），保存即生效
+    "brain.vision_mode",
     # 长期记忆（标准版）：Brain 每次决策/提取从 config 读取，保存即生效；
     # db_path / max_items 属装配期读取（需重启），不在此列
     "brain.memory.enabled",
@@ -133,8 +136,10 @@ HOT_RELOAD_PATHS = {
     "speech.tts.tts_clone.lang",
     "speech.tts.tts_clone.timeout",
     # MiMo 克隆 TTS 参数（MimoTTSEngine 每次合成从 config 读取；model/api_key_env
-    # 属需重启字段：model 需重启更稳妥，api_key 走 .env 需重启进程加载）
+    # 属需重启字段：model 需重启更稳妥，api_key_env 仅声明环境变量名）
     "speech.tts.tts_mimo.base_url",
+    # A-19：tts_mimo.api_key 实际每次热读（_cfg_api_key() 从 config 读取），保存即生效
+    "speech.tts.tts_mimo.api_key",
     "speech.tts.tts_mimo.ref_audio_path",
     "speech.tts.tts_mimo.timeout",
     # CosyVoice（DashScope）参数：voice_id/model/timeout 每次合成从 config 读取

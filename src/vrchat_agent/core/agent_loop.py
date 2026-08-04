@@ -218,6 +218,9 @@ class AgentLoop:
         self._restart_requested = False
         # 需求 4：对话队列 + 批量合并（旧 UtteranceQueue，兼容保留）
         self._utterance_queue = UtteranceQueue(max_batch=3)
+        # A-14：旧 _process_next 路径的互斥锁——在 __init__ 显式创建（此前每次
+        # 调用临时新建 asyncio.Lock()，无互斥语义；现恢复"同时只处理一条对话"）。
+        self._processing_lock = asyncio.Lock()
 
         # ---- P0 流水线并发 ----
         # LLM Semaphore：限制并发 LLM 请求数（config agent.pipeline.llm_semaphore）
@@ -251,8 +254,10 @@ class AgentLoop:
         _mapper = getattr(self._actuator, '_mapper', None)
         if _mapper is not None and self._config is not None:
             try:
+                # A-08：传 Config 门面（非构造期 IdleInstinctConfig 快照），
+                # 使 idle_instinct.* 保存后真正热重载（每次 tick 读最新值）。
                 self._idle_instinct = IdleInstinct(
-                    self._actuator, _mapper, self._config.agent.idle_instinct,
+                    self._actuator, _mapper, self._config,
                 )
                 logger.info("空闲本能已初始化")
             except Exception:
@@ -998,8 +1003,11 @@ class AgentLoop:
         P0 重构后主路径不再经过此方法。保留用于：
         - 旧 UtteranceQueue 模式兼容
         - 测试引用
+
+        A-14：互斥锁在 __init__ 显式创建（self._processing_lock），并发调用时
+        真正串行，恢复互斥语义。
         """
-        async with self._processing_lock if hasattr(self, '_processing_lock') else asyncio.Lock():
+        async with self._processing_lock:
             self._utterance_queue.processing = True
             try:
                 if self._state in (

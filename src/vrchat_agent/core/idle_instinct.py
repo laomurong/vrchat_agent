@@ -73,17 +73,21 @@ class IdleInstinct:
         await instinct.stop()    # 新 utterance / 急停时打断
     """
 
-    def __init__(self, actuator, action_mapper, config: IdleInstinctConfig) -> None:
+    def __init__(self, actuator, action_mapper, config) -> None:
         """初始化空闲本能。
 
         Args:
             actuator: MCPOSCActuator 实例（需有 _call_tool_safe 方法）。
             action_mapper: ActionMapper 实例（保留以备后续扩展）。
-            config: 空闲本能配置。
+            config: Config 门面（推荐，热重载即时生效）或 IdleInstinctConfig
+                实例（测试/旧调用方兼容：此时无热重载语义）。
         """
         self._actuator = actuator
         self._mapper = action_mapper
-        self._cfg = config
+        # A-08：持有 Config 门面而非构造期 IdleInstinctConfig 快照。
+        # Config.reload() 会替换内部 AppConfig，通过门面每次读取即取到最新值；
+        # 兼容直接传入 IdleInstinctConfig（测试/旧调用方），此时无热重载。
+        self._config = config
         # 取消事件：新 utterance 来 / 急停时 set，循环在下次检查点退出
         self._cancel_event = asyncio.Event()
         # 后台循环任务引用
@@ -92,6 +96,14 @@ class IdleInstinct:
         self._recent_signatures: list[str] = []
         # 连续跳过计数
         self._consecutive_skips: int = 0
+
+    @property
+    def _cfg(self) -> IdleInstinctConfig:
+        """当前生效的 idle_instinct 配置（每次访问解析，支持热重载）。"""
+        cfg = self._config
+        if isinstance(cfg, IdleInstinctConfig):
+            return cfg
+        return cfg.agent.idle_instinct
 
     # ------------------------------------------------------------------
     # 公开接口

@@ -44,7 +44,10 @@ class AsrConfig(BaseModel):
     vad_mode: int = 2
     min_speech_ms: int = 300
     silence_ms: int = 800
-    max_segment_s: int = 15
+    # A-16：max_segment_s 为 float（如 0.3s 用于短语音段）——此前声明为 int，
+    # 0.3 会被 pydantic 拒绝；SpeechSegmenter 内部已按 float 处理（_recompute_frames
+    # 用 float×1000/chunk_ms 计算帧数），热重载处也改 float() 保持一致。
+    max_segment_s: float = 15.0
 
 
 class AudioInputConfig(BaseModel):
@@ -186,7 +189,10 @@ class MimoTTSConfig(BaseModel):
     api_key_env: str = "MIMO_TTS_API_KEY"
     api_key: str | None = None        # 运行时由 .env 解析，不写入 yaml
     model: str = "mimo-v2.5-tts-voiceclone"
-    ref_audio_path: str = "C:/Users/14718/Documents/Voicemeeter/Record 2026-08-02 at 20h19m47s.wav"
+    # A-18：默认不再硬编码本机绝对路径（留空由装配期/合成期给出清晰提示"请配置"）。
+    # config.yaml 已覆盖该项则不受影响；MimoTTSEngine 合成时对空值抛含字段名的
+    # TTSError（触发 FallbackTTSEngine 回退 Edge，不阻断说话）。
+    ref_audio_path: str = ""
     timeout: float = 60.0
 
 
@@ -244,16 +250,11 @@ class BridgeConfig(BaseModel):
     # command/args 直接以 node + 绝对路径拉起 OSC 桥接（vrchat-mcp-osc 社区包装包）：
     # 包 bin 名为 iflow-mcp_krekun-vrchat-mcp-osc（非 vrchat-mcp-osc），且 stdio 子进程
     # 不依赖 cwd，故用 node 直接执行 server.js 最可靠；postinstall 已修复包内路径缺陷。
-    # command 默认值（BugFix P1）：本机 Node 不在系统 PATH（位于 .workbuddy 托管目录），
-    # 配置为 node.exe 绝对路径（正斜杠）避免子进程 WinError 2；其他机器可改回 "node"
-    # 或填各自 node.exe 绝对路径。若配置了非路径形式的命令且系统找不到，MCPClient
-    # 会给出友好报错（提示加入 PATH 或配置绝对路径）。
-    command: str = "C:/Users/14718/.workbuddy/binaries/node/versions/22.22.2/node.exe"
-    args: list[str] = Field(
-        default_factory=lambda: [
-            "E:/vrc具身agent/vrchat_agent/node_bridge/node_modules/@iflow-mcp/krekun-vrchat-mcp-osc/packages/mcp-server/dist/server.js"
-        ]
-    )
+    # A-18：默认不再硬编码本机绝对路径（command/args 留空）。config.yaml 已覆盖则
+    # 不受影响；未配置时 MCPClient.start() 会抛清晰 MCPError 提示"请配置
+    # action.bridge.command"，main 装配层捕获后降级为仅语音无动作（NoopActuator）。
+    command: str = ""
+    args: list[str] = Field(default_factory=list)
     timeout: float = 5.0
 
 
