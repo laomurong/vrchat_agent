@@ -117,6 +117,27 @@ class ContextConfig(BaseModel):
     max_turns: int = 10
 
 
+class SemanticMemoryConfig(BaseModel):
+    """语义检索（embedding）配置：本地 sentence-transformers 模型（任务②）。
+
+    - enabled：总开关（false 时检索完全走关键词匹配）；
+    - model_name：embedding 模型名（多语言默认
+      paraphrase-multilingual-MiniLM-L12-v2），模型权重放 model/ 目录不入 git；
+    - model_dir：模型根目录（相对项目根；实际模型目录为 model_dir/model_name，
+      含 config.json 才算可用）；目录不存在 → 首次使用时 WARNING 并自动降级
+      关键词匹配（**不自动联网下载**）；
+    - top_k：语义检索返回条数上限（查询时截断）；
+    - device：推理设备（cpu / cuda），本地小模型默认 cpu 即可。
+    属装配期读取（改后需重启）；纯本地推理，无 API key（不写明文）。
+    """
+
+    enabled: bool = True
+    model_name: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    model_dir: str = "model"
+    top_k: int = 5
+    device: str = "cpu"
+
+
 class MemoryConfig(BaseModel):
     """长期记忆（标准版）配置：本地持久化事实/喜好，跨会话生效。
 
@@ -126,7 +147,9 @@ class MemoryConfig(BaseModel):
     - inject_limit：每次注入 LLM 的记忆条数（热重载）；
     - auto_extract：对话后自动提取长期事实（消耗少量 LLM token，可关；热重载）；
     - extract_interval：每 N 轮决策提取一次（省 token；热重载）；
-    - extract_max_items：每次提取最多写入条数（热重载）。
+    - extract_max_items：每次提取最多写入条数（热重载）；
+    - semantic：语义检索层（任务②，懒加载 embedding；模型缺失自动降级关键词，
+      装配期读取，改后需重启）。
     """
 
     enabled: bool = True
@@ -136,6 +159,7 @@ class MemoryConfig(BaseModel):
     auto_extract: bool = True
     extract_interval: int = 3
     extract_max_items: int = 5
+    semantic: SemanticMemoryConfig = Field(default_factory=SemanticMemoryConfig)
 
 
 class BrainConfig(BaseModel):

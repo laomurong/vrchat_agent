@@ -583,13 +583,17 @@ def create_app(
         return mem
 
     def _memory_config_snapshot() -> dict[str, Any]:
-        """当前记忆配置快照（enabled/auto_extract/max_items，供前端开关回显）。"""
+        """当前记忆配置快照（enabled/auto_extract/max_items + 语义检索状态，供前端回显）。"""
         try:
             cfg = config.brain.memory
+            sem = getattr(cfg, "semantic", None)
             return {
                 "enabled": bool(getattr(cfg, "enabled", True)),
                 "auto_extract": bool(getattr(cfg, "auto_extract", True)),
                 "max_items": int(getattr(cfg, "max_items", 200)),
+                "semantic_enabled": bool(getattr(sem, "enabled", False)) if sem else False,
+                "semantic_model": str(getattr(sem, "model_name", "")) if sem else "",
+                "semantic_top_k": int(getattr(sem, "top_k", 0)) if sem else 0,
             }
         except Exception:
             return {"enabled": True, "auto_extract": True, "max_items": 200}

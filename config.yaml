@@ -62,6 +62,15 @@ brain:
     auto_extract: true
     extract_interval: 3
     extract_max_items: 5
+    # 语义检索层（任务②）：本地 embedding（sentence-transformers，多语言小模型）。
+    # 模型权重放 model/ 目录（不入 git）：model/<model_name>/config.json 存在即启用；
+    # 未配置/模型缺失 → 首次使用时 WARNING + 自动降级关键词匹配（不自动下载）。
+    semantic:
+      enabled: true
+      model_name: paraphrase-multilingual-MiniLM-L12-v2
+      model_dir: model
+      top_k: 5
+      device: cpu
   vision_mode: reference_only
 speech:
   tts:

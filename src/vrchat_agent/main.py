@@ -279,6 +279,7 @@ async def build_and_run(config: Config) -> None:
     from .brain.context import ConversationContext
     from .brain.llm_client import LLMClient
     from .brain.memory import MemoryStore
+    from .brain.semantic_memory import SemanticMemoryStore
 
     if not config.brain.llm.api_key:
         logger.warning("未配置 LLM_API_KEY：将使用空 key（仅本地 Ollama/vLLM 可工作）")
@@ -296,12 +297,29 @@ async def build_and_run(config: Config) -> None:
     db_path = Path(config.brain.memory.db_path)
     if not db_path.is_absolute():
         db_path = PROJECT_ROOT / db_path
-    memory_store = MemoryStore(db_path, max_items=config.brain.memory.max_items)
+    # 语义检索层（任务②）：懒加载 embedding，模型缺失自动降级关键词，不阻塞装配。
+    # 模型权重放 model/（不入 git）；本地目录不存在 → 首次使用时 WARNING 降级。
+    semantic_store = None
+    sem_cfg = config.brain.memory.semantic
+    if sem_cfg.enabled:
+        sem_model_dir = Path(sem_cfg.model_dir)
+        if not sem_model_dir.is_absolute():
+            sem_model_dir = PROJECT_ROOT / sem_model_dir
+        semantic_store = SemanticMemoryStore(
+            db_path,
+            model_name=sem_cfg.model_name,
+            model_dir=sem_model_dir,
+            enabled=True,
+            top_k=sem_cfg.top_k,
+            device=sem_cfg.device,
+        )
+    memory_store = MemoryStore(db_path, max_items=config.brain.memory.max_items, semantic=semantic_store)
     logger.info(
-        "长期记忆库: %s（%s，上限 %d 条）",
+        "长期记忆库: %s（%s，上限 %d 条；语义检索 %s）",
         memory_store.db_path,
         "启用" if config.brain.memory.enabled else "禁用",
         config.brain.memory.max_items,
+        "已接线（懒加载）" if semantic_store is not None else "未启用（关键词匹配）",
     )
     brain = Brain(
         llm=llm,

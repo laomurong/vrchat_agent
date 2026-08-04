@@ -27,6 +27,10 @@ vrchatapi>=1.0.0            # VRChat 官方 API SDK（任务①：换头像/查�
 rich>=13.7.0                # 终端仪表盘美化
 # silero-vad>=5.1.0         # 高质量 VAD（需 torch，P1 可选）
 
+# ---- 可选（任务②：记忆语义检索；本地 embedding，模型放 model/ 不入 git）----
+# sentence-transformers>=2.7.0  # 语义记忆：paraphrase-multilingual-MiniLM-L12-v2
+#                              # 依赖 torch（体积大），未安装时自动降级关键词匹配
+
 # ---- Web 控制台（M4 增量，W-01/W-02）----
 fastapi>=0.111              # Web 框架（与 pydantic v2 同生态）
 uvicorn>=0.30               # ASGI 服务器（纯 Python 轻量组合；不用 [standard]）

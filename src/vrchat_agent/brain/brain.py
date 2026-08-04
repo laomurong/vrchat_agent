@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import time
+from typing import Any
 
 from .context import ConversationContext
 from .llm_client import LLMClient, LLMError
@@ -108,8 +109,13 @@ class Brain:
                 pass
         return self._memory.enabled
 
-    def _build_memory_block(self) -> str:
-        """构造长期记忆注入块（[长期记忆] 节）；禁用/无存储/无记忆返回空串。"""
+    def _build_memory_block(self, utterance: str) -> str:
+        """构造长期记忆注入块（[长期记忆] 节）；禁用/无存储/无记忆返回空串。
+
+        检索顺序（任务②语义层）：embedding 余弦 top-k（MemoryStore.search 内部
+        已做语义→关键词 LIKE 兜底）→ 仍为空则回退常用记忆 recall；
+        任何失败静默降级，不阻塞主循环。
+        """
         if not self._memory_enabled():
             return ""
         cfg = self._memory_config()
@@ -118,10 +124,20 @@ class Brain:
         except Exception:
             limit = 5
         limit = max(1, min(limit, 20))
+        memories: list[dict[str, Any]] = []
+        query = (utterance or "").strip()
         try:
-            memories = self._memory.recall(limit=limit)
+            if query:
+                # 语义优先 + 关键词兜底（语义层未注入/模型缺失时自动回退关键词）
+                memories = self._memory.search(query, top_k=limit)
         except Exception:
             memories = []
+        if not memories:
+            try:
+                # 最终兜底：常用记忆（use_count 高 + 最近使用优先）
+                memories = self._memory.recall(limit=limit)
+            except Exception:
+                memories = []
         lines = []
         ids: list[int] = []
         for m in memories:
@@ -149,8 +165,9 @@ class Brain:
         system = build_system_prompt(persona_name, persona_desc)
         instruction = build_decision_instruction()
         messages = [{"role": "system", "content": f"{system}\n\n{instruction}"}]
-        # 长期记忆注入（标准版）：把常用记忆以 [长期记忆] 节注入 system，跨会话生效
-        memory_block = self._build_memory_block()
+        # 长期记忆注入（标准版 + 任务②语义层）：按当前 utterance 语义检索相关记忆，
+        # 以 [长期记忆] 节注入 system，跨会话生效；语义不可用自动回退关键词/常用记忆
+        memory_block = self._build_memory_block(utterance)
         if memory_block:
             messages[0]["content"] += f"\n\n{memory_block}"
         messages.extend(self._context.to_messages())

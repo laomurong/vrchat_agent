@@ -42,6 +42,12 @@ dependencies = [
 [project.scripts]
 vrchat-agent = "vrchat_agent.main:main_entry"
 
+# 可选依赖：记忆语义检索（任务②）——本地 embedding（sentence-transformers，
+# 依赖 torch 体积大）；未安装时自动降级关键词匹配，不影响主流程。
+# 安装：pip install -e ".[semantic]"
+[project.optional-dependencies]
+semantic = ["sentence-transformers>=2.7.0"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
