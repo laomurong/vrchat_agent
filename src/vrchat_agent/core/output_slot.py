@@ -26,7 +26,7 @@ class OutputSlot:
     - enqueue(utt)：TTS 完成后入队（state → QUEUED）
     - wait_and_play(play_func, exec_func)：消费者阻塞等待，取队首 gather 三路
     - interrupt()：停当前 + 清队列（打断时清理旧 utterance）
-    - clear()：停当前 + 清队列 + 置停止标记（急停用）
+    - clear()：停当前 + 清队列（急停用；末尾复位停止标记，急停可恢复）
     """
 
     def __init__(self, maxsize: int = 3) -> None:
@@ -34,6 +34,10 @@ class OutputSlot:
         self._lock = asyncio.Lock()
         self._current: Utterance | None = None
         self._stopped = False
+        # A-01：输出槽可用性唤醒事件（clear() 复位 _stopped 后 set，
+        # 唤醒空转等待的消费者，替代急停后的 50ms 轮询）。
+        self._ready_event = asyncio.Event()
+        self._ready_event.set()
 
     # ------------------------------------------------------------------
     # 只读属性
@@ -177,7 +181,12 @@ class OutputSlot:
     # 急停
     # ------------------------------------------------------------------
     async def clear(self) -> None:
-        """急停：取消当前播放 + 清空队列 + 标记停止（输出槽不可再用）。"""
+        """急停：取消当前播放 + 清空队列；末尾复位停止标记（急停可恢复，A-01）。
+
+        复位语义（A-01）：急停后输出槽立即可复用——后续 enqueue/wait_and_play
+        恢复正常，避免"按一次急停 Agent 永久失声"。复位时 set 唤醒事件，
+        让空转等待的 _drain_output_slot 立即恢复消费。
+        """
         self._stopped = True
         if self._current is not None:
             logger.info("急停取消当前播放: %s", self._current.id)
@@ -194,3 +203,17 @@ class OutputSlot:
                 break
         if cancelled_count:
             logger.info("急停清空队列: %d 条", cancelled_count)
+
+        # A-01：急停可恢复 —— 复位停止标记并唤醒等待中的消费者
+        self._stopped = False
+        self._ready_event.set()
+
+    async def wait_until_ready(self) -> None:
+        """阻塞直到输出槽可再次消费（clear() 复位后返回）。
+
+        A-01：替代急停后的 50ms 轮询——clear() 复位 _stopped 时 set 事件唤醒。
+        正常未停止时立即返回（事件初始为 set）。
+        """
+        while self._stopped:
+            await self._ready_event.wait()
+            self._ready_event.clear()

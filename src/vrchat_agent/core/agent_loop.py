@@ -692,6 +692,8 @@ class AgentLoop:
             self._last_latency_s = latency
             self._play_started_at = time.time()
             self._play_clip_duration = utt.clip.duration if utt.clip else 0.0
+            # A-02：标记已进入播放（TTS_STARTED 已发布）——取消时据此补发 TTS_FINISHED
+            utt.started_playing = True
             self._transition(AgentState.SPEAKING, latency_s=latency)
             self._publish_pipeline_state()
             if utt.decision and utt.decision.reply_text:
@@ -715,8 +717,8 @@ class AgentLoop:
                 on_start=_on_play_start,
             )
             if utt is None:
-                # 输出槽已停止（急停）
-                await asyncio.sleep(0.05)
+                # 输出槽暂不可用（急停窗口）：事件阻塞等待复位（A-01，替代 50ms 轮询）
+                await self._output_slot.wait_until_ready()
                 continue
 
             # 播放完成后的收尾（打断的也计数，匹配旧行为）
@@ -727,6 +729,13 @@ class AgentLoop:
                     self._last_reply = utt.decision.reply_text
                 # 发布 TTS_FINISHED（播放完成后）
                 self._bus.publish(Event(EventType.TTS_FINISHED.value, {}))
+            else:
+                # A-02：播放中被取消（打断/急停）也补发 TTS_FINISHED，
+                # 解除自抑制静音窗口——否则首次打断后 Agent 永久"聋"。
+                # 仅当确实进入过播放（TTS_STARTED 已发布）才补发，避免
+                # 未播放即取消的 utterance 误关正在播放的另一条静音窗口。
+                if utt.started_playing:
+                    self._bus.publish(Event(EventType.TTS_FINISHED.value, {}))
 
             # 播放完成后检测是否需要触发视觉校准循环
             if utt.state == UtteranceState.DONE and utt.actions:
@@ -844,6 +853,9 @@ class AgentLoop:
         except Exception:
             logger.exception("急停动作复位失败")
         self._state = AgentState.IDLE
+        # A-03：急停可恢复 —— 复位紧急停止标志（与 legacy _handle_utterance
+        # 开头复位语义一致），否则急停后所有 move/look/emote 动作永久被跳过。
+        self._emergency_stopped = False
         self._bus.publish(
             Event(
                 EventType.STATE_CHANGED.value,

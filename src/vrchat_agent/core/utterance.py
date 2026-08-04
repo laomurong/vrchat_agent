@@ -60,6 +60,9 @@ class Utterance:
     chatbox_actions: list[Action] = field(default_factory=list)
     respond: bool = False
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
+    # A-02：是否已进入播放（TTS_STARTED 已发布）。播放中被取消（打断/急停）时，
+    # AgentLoop 据此补发 TTS_FINISHED，解除自抑制静音窗口（避免 Agent 永久"聋"）。
+    started_playing: bool = False
 
     @property
     def is_active(self) -> bool:

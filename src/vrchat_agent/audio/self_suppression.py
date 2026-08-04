@@ -54,6 +54,17 @@ class SelfSuppression:
             self._audio_input.set_muted(False)
         logger.info("自抑制：解除静音窗口")
 
+    async def on_emergency_stop(self, event: Event | None = None) -> None:
+        """急停 → 强制解除静音窗口（A-02 兜底）。
+
+        打断/急停取消播放时若漏发 TTS_FINISHED，静音窗口永不解除导致麦克风
+        永久静音（Agent"聋"）；订阅急停事件强制恢复，保证急停后一定能听到。
+        """
+        self._suppressing = False
+        if self._audio_input is not None:
+            self._audio_input.set_muted(False)
+        logger.info("自抑制：急停强制解除静音窗口")
+
     # ---- 查询 ----
     def should_suppress(self) -> bool:
         """当前是否处于静音窗口（应丢弃 ASR 输入）。"""
@@ -71,3 +82,5 @@ class SelfSuppression:
             return
         self._bus.subscribe(EventType.TTS_STARTED.value, self.on_tts_started)
         self._bus.subscribe(EventType.TTS_FINISHED.value, self.on_tts_finished)
+        # A-02：急停事件强制解除静音（兜底，防止取消路径漏发 TTS_FINISHED 致聋）
+        self._bus.subscribe(EventType.EMERGENCY_STOP.value, self.on_emergency_stop)
