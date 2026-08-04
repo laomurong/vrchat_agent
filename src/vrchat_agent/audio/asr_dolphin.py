@@ -71,39 +71,52 @@ class DolphinSpeechToText:
             raise ASRError(f"Dolphin ASR 缺少 tokens.txt（{self.tokens or path}）")
         return onnx, tokens
 
+    def _load_sync(self):
+        """同步执行模型加载（import + 文件解析 + 构建 recognizer）。
+
+        提取为独立同步函数供 ``asyncio.to_thread`` 调用（A-09：模型加载为
+        CPU/ONNX 密集阻塞，必须移出事件循环，否则首次 transcribe 会卡死
+        Web 控制台/急停）。异常统一包装为 ASRError。
+        """
+        try:
+            import sherpa_onnx
+        except ImportError as exc:
+            raise ASRError("sherpa-onnx 未安装（pip install sherpa-onnx）") from exc
+        try:
+            onnx_path, tokens_path = self._resolve_files()
+            for f in (onnx_path, tokens_path):
+                if not os.path.isfile(f):
+                    raise ASRError(f"Dolphin ASR 模型文件缺失: {f}")
+            logger.info(
+                "加载 sherpa-onnx Dolphin 模型: %s（%s/%s/%s）",
+                onnx_path, self.provider, self.num_threads, self.decoding_method,
+            )
+            return sherpa_onnx.OfflineRecognizer.from_dolphin_ctc(
+                model=onnx_path,
+                tokens=tokens_path,
+                num_threads=self.num_threads,
+                provider=self.provider,
+                decoding_method=self.decoding_method,
+            )
+        except ASRError:
+            raise
+        except Exception as exc:
+            raise ASRError(
+                f"加载 Dolphin 模型失败（{self.model_path}）: {exc}"
+            ) from exc
+
     async def _ensure_model(self):
-        """惰性加载 sherpa-onnx recognizer（线程安全，缺依赖/缺文件抛 ASRError）。"""
+        """惰性加载 sherpa-onnx recognizer（线程安全，缺依赖/缺文件抛 ASRError）。
+
+        A-09：实际加载经 ``asyncio.to_thread`` 移出事件循环，首次 transcribe
+        不阻塞 Web 控制台/急停；双重检查锁语义保留。
+        """
         if self._recognizer is not None:
             return
         async with self._load_lock:
             if self._recognizer is not None:
                 return
-            try:
-                import sherpa_onnx
-            except ImportError as exc:
-                raise ASRError("sherpa-onnx 未安装（pip install sherpa-onnx）") from exc
-            try:
-                onnx_path, tokens_path = self._resolve_files()
-                for f in (onnx_path, tokens_path):
-                    if not os.path.isfile(f):
-                        raise ASRError(f"Dolphin ASR 模型文件缺失: {f}")
-                logger.info(
-                    "加载 sherpa-onnx Dolphin 模型: %s（%s/%s/%s）",
-                    onnx_path, self.provider, self.num_threads, self.decoding_method,
-                )
-                self._recognizer = sherpa_onnx.OfflineRecognizer.from_dolphin_ctc(
-                    model=onnx_path,
-                    tokens=tokens_path,
-                    num_threads=self.num_threads,
-                    provider=self.provider,
-                    decoding_method=self.decoding_method,
-                )
-            except ASRError:
-                raise
-            except Exception as exc:
-                raise ASRError(
-                    f"加载 Dolphin 模型失败（{self.model_path}）: {exc}"
-                ) from exc
+            self._recognizer = await asyncio.to_thread(self._load_sync)
 
     async def transcribe(self, audio: np.ndarray) -> str:
         """转写一段 float32 音频（任意采样率，sherpa 自动重采样），返回识别文本。"""

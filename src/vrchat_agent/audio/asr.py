@@ -152,7 +152,7 @@ class SpeechToText:
             raise
 
     async def _ensure_model(self):
-        """惰性加载 Whisper 模型（线程安全）。"""
+        """惰性加载 Whisper 模型（线程安全，A-09：加载在 executor 线程执行）。"""
         if self._model is not None:
             return
         async with self._load_lock:
@@ -160,7 +160,10 @@ class SpeechToText:
                 return
             try:
                 load_arg = self._resolve_model_arg()
-                self._model = self._load_with_fallback(load_arg)
+                # A-09：模型加载为 CPU/GPU 密集阻塞（数秒~分钟），必须移出事件循环，
+                # 否则首次 transcribe 会卡死 Web 控制台/急停。双重检查锁语义保留：
+                # 锁内 await，其它协程无法并发进入。
+                self._model = await asyncio.to_thread(self._load_with_fallback, load_arg)
             except ImportError as exc:
                 raise ASRError("faster-whisper 未安装（pip install faster-whisper）") from exc
             except ASRError:
