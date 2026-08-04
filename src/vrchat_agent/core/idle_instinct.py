@@ -162,7 +162,7 @@ class IdleInstinct:
         actions: list[tuple[str, dict]] = []  # (tool_name, args)
 
         # ---- 停顿（30%）：本 tick 什么都不做 ----
-        if random.random() < _HESITATE_PROB:
+        if random.random() < self._cfg.hesitate_prob:
             logger.debug("空闲本能 tick：停顿（hesitate）")
             return
 
@@ -172,7 +172,7 @@ class IdleInstinct:
             # 随机方向：left/right/up/down
             direction = random.choice(["left", "right", "up", "down"])
             # 过冲检查（10%，叠在 jitter 上）
-            overshoot = random.random() < _OVERSHOOT_PROB
+            overshoot = random.random() < self._cfg.look_overshoot_prob
 
             if direction in ("left", "right"):
                 axis = "horizontal"
@@ -210,7 +210,7 @@ class IdleInstinct:
                 logger.debug("空闲本能 tick：微抖 %s %.1f°", direction, deg)
 
         # ---- 小步移动（15%）----
-        if random.random() < _SMALL_MOVE_PROB:
+        if random.random() < self._cfg.small_step_move_prob:
             move_dir = random.choice(["forward", "backward", "left", "right"])
             if move_dir in ("forward", "backward"):
                 axis = "vertical"
