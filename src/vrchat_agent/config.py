@@ -323,22 +323,22 @@ class IdleInstinctConfig(BaseModel):
     所有字段均为热重载（保存 config 后 run_loop 下次 tick 读取最新值）。
     """
 
-    enabled: bool = True
+    enabled: bool = Field(default=True, title="启用本能循环")
     # 每次微动作间隔（秒），实际在 [min, max] 之间随机
-    interval_min_sec: float = Field(default=0.3, ge=0.05, le=5.0)
-    interval_max_sec: float = Field(default=0.7, ge=0.05, le=5.0)
+    interval_min_sec: float = Field(default=0.3, ge=0.1, le=5.0, title="最小间隔秒")
+    interval_max_sec: float = Field(default=0.7, ge=0.1, le=5.0, title="最大间隔秒")
     # 视角微抖角度范围（度），近似值
-    jitter_min_deg: float = Field(default=1.0, ge=0.1, le=10.0)
-    jitter_max_deg: float = Field(default=3.0, ge=0.1, le=10.0)
+    jitter_min_deg: float = Field(default=1.0, ge=0.1, le=10.0, title="最小抖动度数")
+    jitter_max_deg: float = Field(default=3.0, ge=0.1, le=10.0, title="最大抖动度数")
     # 过冲修正概率（叠在 jitter 上）
-    look_overshoot_prob: float = Field(default=0.10, ge=0.0, le=1.0)
+    look_overshoot_prob: float = Field(default=0.10, ge=0.0, le=1.0, title="过冲修正概率")
     # 停顿概率（本 tick 什么都不做）
-    hesitate_prob: float = Field(default=0.30, ge=0.0, le=1.0)
+    hesitate_prob: float = Field(default=0.30, ge=0.0, le=1.0, title="停顿概率")
     # 小步移动概率
-    small_step_move_prob: float = Field(default=0.15, ge=0.0, le=1.0)
+    small_step_move_prob: float = Field(default=0.15, ge=0.0, le=1.0, title="小步移动概率")
     # 小步移动 duration 范围（秒），极短，几乎看不出来
-    move_duration_min_sec: float = Field(default=0.08, ge=0.01, le=1.0)
-    move_duration_max_sec: float = Field(default=0.15, ge=0.01, le=1.0)
+    move_duration_min_sec: float = Field(default=0.08, ge=0.01, le=1.0, title="移动最短秒")
+    move_duration_max_sec: float = Field(default=0.15, ge=0.01, le=1.0, title="移动最长秒")
 
 
 class AgentConfig(BaseModel):

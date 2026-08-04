@@ -143,6 +143,17 @@ HOT_RELOAD_PATHS = {
     "speech.tts.tts_cosyvoice.voice_id",
     "speech.tts.tts_cosyvoice.model",
     "speech.tts.tts_cosyvoice.timeout",
+    # idle_instinct 空闲本能微动作循环（IdleInstinctLoop 每次 tick 从 config 读取，保存即生效）
+    "agent.idle_instinct.enabled",
+    "agent.idle_instinct.interval_min_sec",
+    "agent.idle_instinct.interval_max_sec",
+    "agent.idle_instinct.jitter_min_deg",
+    "agent.idle_instinct.jitter_max_deg",
+    "agent.idle_instinct.look_overshoot_prob",
+    "agent.idle_instinct.hesitate_prob",
+    "agent.idle_instinct.small_step_move_prob",
+    "agent.idle_instinct.move_duration_min_sec",
+    "agent.idle_instinct.move_duration_max_sec",
     # dashboard / logging
     "dashboard.refresh_ms",
     "logging.level",
