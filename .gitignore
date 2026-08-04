@@ -61,3 +61,10 @@ qa-*.log
 qa-*.txt
 package_test.log
 r2_smoke.py
+
+# QA 测试输出残留
+_test_result.txt
+pytest_full_result.txt
+pytest_output.txt
+_qa_round_*.log
+_qa_regression_*.log
