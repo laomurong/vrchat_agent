@@ -904,7 +904,7 @@ function switchConfigTab(tabId) {
   document.querySelectorAll("#config-tab-bar .tab-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === tabId);
   });
-  document.querySelectorAll("[data-tab]").forEach((el) => {
+  document.querySelectorAll(".tab-panels [data-tab]").forEach((el) => {
     el.style.display = el.dataset.tab === tabId ? "" : "none";
   });
 }
