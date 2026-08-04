@@ -33,6 +33,10 @@ FORWARDED_TYPES = [
 _DEFAULT_TIMELINE_MAX = 200
 _ACTION_KEEP = 3
 
+# A-12：每个 SSE 连接事件队列上限。慢客户端消费不及时导致积压时，
+# 丢弃最旧事件（get_nowait 后 put），保证内存有界、事件循环不被拖垮。
+_SSE_QUEUE_MAXSIZE = 500
+
 
 class WebStatusStore:
     """Web 状态订阅者：维护快照 + 最近时间线 + 每连接事件队列。
@@ -83,7 +87,18 @@ class WebStatusStore:
                 {"ts": round(event.ts, 3), "type": event.type, "payload": event.payload}
             )
             for queue in self._queues:
-                queue.put_nowait(event)
+                try:
+                    queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    # A-12：慢客户端队列满 → 丢弃最旧事件后重试一次，仍满则丢新事件
+                    try:
+                        queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+                    try:
+                        queue.put_nowait(event)
+                    except asyncio.QueueFull:
+                        pass
         except Exception:
             logger.exception("WebStatusStore 事件处理异常", extra={"event": "web_error"})
 
@@ -120,8 +135,8 @@ class WebStatusStore:
 
     # ---- 每连接队列 ----
     def register_queue(self) -> asyncio.Queue[Event]:
-        """为单个 SSE 连接注册事件队列。"""
-        queue: asyncio.Queue[Event] = asyncio.Queue()
+        """为单个 SSE 连接注册事件队列（A-12：有界，满时丢弃最旧事件）。"""
+        queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
         self._queues.append(queue)
         return queue
 

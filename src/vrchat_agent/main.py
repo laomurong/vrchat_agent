@@ -464,6 +464,12 @@ async def build_and_run(config: Config) -> None:
                 await actuator.shutdown()
         except Exception:
             pass
+        # A-13：关停前等待最近一次异步记忆提取任务完成（超时 3s，异常静默），
+        # 避免 LLM/写库中途被进程退出打断造成半写入。
+        try:
+            await brain.wait_extract(timeout=3)
+        except Exception:
+            pass
         try:
             await mcp.stop()
         except Exception:
