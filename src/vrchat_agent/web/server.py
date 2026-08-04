@@ -470,7 +470,7 @@ def create_app(
         except LookupError:
             return _no_control()
         try:
-            ctrl.skip()
+            await ctrl.skip()
             qs = ctrl.output_slot.queue_size() if ctrl.output_slot else 0
             return JSONResponse(
                 content={

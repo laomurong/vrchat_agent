@@ -228,6 +228,10 @@ class AgentLoop:
         self._output_slot = OutputSlot(maxsize=self._pipeline_output_queue_max())
         # 飞行中的 pipeline 任务集合（用于打断/急停批量取消）
         self._pipe_tasks: set[asyncio.Task] = set()
+        # A-07：事件 handler 任务集合（run()/stop() 时统一取消，防止停后仍在跑）
+        self._handler_tasks: set[asyncio.Task] = set()
+        # A-07：空闲本能启动任务（run()/stop() 时统一取消）
+        self._idle_task: asyncio.Task | None = None
         # 活跃 utterance 集合（key=utt.id，用于打断/急停批量设置 cancel_event）
         self._active_utterances: dict[str, Utterance] = {}
         # P1-1：utt.id → pipeline Task 映射（用于打断时精准取消飞行中 TTS）
@@ -370,7 +374,33 @@ class AgentLoop:
             self._running = False
             for task in tasks:
                 task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
+            # A-07：统一取消飞行中的 pipeline / 事件 handler / 校准 / idle 任务，
+            # 防止 stop() 后任务继续向已停止的 OutputSlot enqueue 或发布事件。
+            for task in list(self._pipe_tasks):
+                task.cancel()
+            for task in list(self._handler_tasks):
+                task.cancel()
+            cal_task = self._calibration_task
+            if cal_task is not None and not cal_task.done():
+                cal_task.cancel()
+            idle_task = self._idle_task
+            if idle_task is not None and not idle_task.done():
+                idle_task.cancel()
+            # 空闲本能内部循环任务一并停止（start() 外层任务已立即返回，需停内层）
+            if self._idle_instinct is not None:
+                await self._idle_instinct.stop()
+            await asyncio.gather(
+                *tasks,
+                *list(self._pipe_tasks),
+                *list(self._handler_tasks),
+                *([cal_task] if cal_task is not None else []),
+                *([idle_task] if idle_task is not None else []),
+                return_exceptions=True,
+            )
+            self._pipe_tasks.clear()
+            self._handler_tasks.clear()
+            self._calibration_task = None
+            self._idle_task = None
 
     def stop(self) -> None:
         """请求停止主循环。"""
@@ -388,7 +418,10 @@ class AgentLoop:
             if not self._running:
                 break
             try:
-                asyncio.create_task(self._safe_handle(handler, event))
+                task = asyncio.create_task(self._safe_handle(handler, event))
+                # A-07：事件 handler 任务纳入跟踪，stop() 时统一取消
+                self._handler_tasks.add(task)
+                task.add_done_callback(self._handler_tasks.discard)
             except Exception:
                 logger.exception("调度事件处理失败: %s", event_type)
 
@@ -702,7 +735,7 @@ class AgentLoop:
                 )
 
         while self._running:
-            # P2-3：跳过当前播放
+            # P2-3：跳过当前播放（兜底；A-04 后 skip() 已直接执行跳过）
             if self._skip_requested:
                 self._skip_requested = False
                 if self._output_slot.is_playing:
@@ -764,9 +797,9 @@ class AgentLoop:
         ):
             if self._state in (AgentState.THINKING, AgentState.SPEAKING, AgentState.ACTION):
                 self._transition(AgentState.IDLE)
-                # 进入 IDLE 后启动空闲本能微动作循环
+                # 进入 IDLE 后启动空闲本能微动作循环（A-07：任务纳入跟踪）
                 if self._idle_instinct is not None:
-                    asyncio.create_task(self._idle_instinct.start())
+                    self._idle_task = asyncio.create_task(self._idle_instinct.start())
 
     # ------------------------------------------------------------------
     # 视觉校准（播放含 look 动作的 utterance 后触发）
@@ -1107,10 +1140,19 @@ class AgentLoop:
                 pass
 
     async def _play_beep(self) -> None:
-        """生成并播放本地提示音（880Hz 衰减正弦，0.4s）。"""
+        """生成并播放本地提示音（880Hz 衰减正弦，0.4s）。
+
+        A-06：播放前先 stop()——停掉在播流（若 TTS 正在播）并等待退出，
+        再播提示音；避免两条流并发覆盖 AudioOutput._active_stream 导致
+        打断/急停失效（原语音流继续播、PortAudio 同设备并发冲突）。
+        """
         sample_rate = 16000
         t = np.linspace(0.0, 0.4, int(sample_rate * 0.4), endpoint=False)
         samples = (0.3 * np.sin(2.0 * np.pi * 880.0 * t) * np.exp(-3.0 * t)).astype(np.float32)
+        try:
+            await self._audio_out.stop()
+        except Exception:
+            logger.debug("播放提示音前停止在播流失败（忽略）")
         await self._audio_out.play(AudioClip(samples=samples, sample_rate=sample_rate))
 
     # ------------------------------------------------------------------
@@ -1235,13 +1277,27 @@ class AgentLoop:
         self._bus.publish(Event(EventType.PIPELINE_STATE.value, payload))
 
     # ---- P2-3：跳过当前播放 ----
-    def skip(self) -> None:
+    async def skip(self) -> None:
         """跳过当前播放中的 utterance，_drain_output_slot 自动取队列下一条。
-        安全：仅在有当前播放或队列非空时标记；无副作用时调用直接忽略。
+
+        A-04：直接执行实际跳过（不等下轮检查）——立即停止音频 + 取消当前
+        utterance，随后 drain 自然消费队列下一条。安全：仅在有当前播放或队列
+        非空时生效；无副作用时调用直接忽略。
         """
-        if self._output_slot.current is not None or self._output_slot.queue_size() > 0:
-            self._skip_requested = True
-            logger.info("请求跳过当前播放", extra={"event": "skip_requested"})
+        if self._output_slot.current is None and self._output_slot.queue_size() == 0:
+            self._skip_requested = False
+            return
+        self._skip_requested = False
+        current = self._output_slot.current
+        if current is not None:
+            logger.info("跳过当前播放: %s (text=%s)", current.id, current.text,
+                        extra={"event": "skip_executed"})
+            current.cancel()
+        try:
+            await self._audio_out.stop()
+        except Exception:
+            logger.exception("跳过播放时停止音频失败", extra={"event": "audio_output_stop_failed"})
+        self._publish_pipeline_state()
 
     def _timeout(self, dotted_path: str, default: float) -> float:
         """从 config 读取超时值（支持热重载），异常回退默认值。"""

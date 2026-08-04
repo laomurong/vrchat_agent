@@ -44,19 +44,31 @@ class AudioOutput:
         self._stop_flag = threading.Event()
         # 当前播放中的 OutputStream（供 stop() 从另一线程 abort 急停）。
         self._active_stream: Any = None
+        # A-06：播放互斥锁——保证任意时刻只有一个活动播放流。
+        # play() 串行化：并发播放请求（如 TTS 与降级 beep）不会互相覆盖
+        # _active_stream，避免打断/急停只 abort 后一条流而原语音继续播。
+        self._play_lock = asyncio.Lock()
 
     async def play(self, clip: AudioClip) -> None:
-        """播放一段音频（阻塞直到播完或被 stop() 中断）。"""
+        """播放一段音频（阻塞直到播完或被 stop() 中断）。
+
+        A-06：互斥保护——同一时刻只允许一个活动播放流；若已有流在播
+        （理论上被锁挡住，防御性兜底），先 stop() 停掉旧流再播新流。
+        """
         if clip is None or len(clip.samples) == 0:
             return
-        self._stop_flag = threading.Event()
-        loop = asyncio.get_running_loop()
-        try:
-            await loop.run_in_executor(None, self._play_blocking, clip)
-        except AudioOutputError:
-            raise
-        except Exception as exc:
-            raise AudioOutputError(f"播放失败: {exc}") from exc
+        async with self._play_lock:
+            # A-06：已有活动流 → 先停止（等待旧播放线程退出）再播新流
+            if self._active_stream is not None:
+                await self.stop()
+            self._stop_flag = threading.Event()
+            loop = asyncio.get_running_loop()
+            try:
+                await loop.run_in_executor(None, self._play_blocking, clip)
+            except AudioOutputError:
+                raise
+            except Exception as exc:
+                raise AudioOutputError(f"播放失败: {exc}") from exc
 
     @staticmethod
     def _resolve_output_device(device: str | None) -> int | str | None:

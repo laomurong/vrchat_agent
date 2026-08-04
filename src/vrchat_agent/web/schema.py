@@ -159,7 +159,8 @@ HOT_RELOAD_PATHS = {
     "logging.level",
 }
 
-# obs_password 掩码哨兵：等于该值时不写盘，恢复当前真实值
+# obs_password 掩码哨兵：GET /api/config 掩码输出用（A-05：写盘不再恢复真实值，
+# 与 api_key 同策略——写盘剔除，运行时经 .env 的 OBS_PASSWORD 注入）
 PASSWORD_MASK = "********"
 
 _BACKUP_SUFFIX = ".bak"
@@ -283,7 +284,12 @@ def mask_config(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_write_payload(validated: AppConfig) -> dict[str, Any]:
-    """构造写盘字典：剔除三个 api_key 字段（keys 属 .env，W-07）。"""
+    """构造写盘字典：剔除 api_key / obs_password（敏感字段属 .env，W-07/A-05）。
+
+    A-05：obs_password 与 api_key 同策略——写盘时剔除，永不明文落盘
+    （config.yaml 被 git 追踪，写回真实值即泄密）；保存后经 Config._apply_env
+    从 OBS_PASSWORD 环境变量重新注入。
+    """
     data = validated.model_dump()
     llm = data.get("brain", {}).get("llm", {})
     if isinstance(llm, dict):
@@ -297,6 +303,9 @@ def build_write_payload(validated: AppConfig) -> dict[str, Any]:
         cosy = tts.get("tts_cosyvoice")
         if isinstance(cosy, dict):
             cosy.pop("api_key", None)
+    sensor = data.get("vision", {}).get("sensor", {})
+    if isinstance(sensor, dict):
+        sensor.pop("obs_password", None)
     return data
 
 
@@ -329,11 +338,8 @@ def save_config(config: Config, data: dict[str, Any]) -> SaveResult:
     except ValidationError as exc:
         raise ConfigValidationError(_validation_detail(exc)) from exc
 
-    # 2) 构造写盘字典：剔除 api_key；obs_password 掩码哨兵恢复现值
+    # 2) 构造写盘字典：剔除 api_key / obs_password（敏感字段永不明文落盘，A-05）
     payload = build_write_payload(validated)
-    sensor = payload.get("vision", {}).get("sensor", {})
-    if isinstance(sensor, dict) and sensor.get("obs_password") == PASSWORD_MASK:
-        sensor["obs_password"] = config.get("vision.sensor.obs_password") or ""
 
     path = Path(config.path)
     backup = path.with_name(path.name + _BACKUP_SUFFIX)
