@@ -31,6 +31,7 @@ from ..speech.audio_output import AudioOutput
 from ..speech.tts import TTSEngine, AudioClip
 from ..vision.sampler import ImageSampler
 from ..vision.vision_sensor import VisionSensor
+from .idle_instinct import IdleInstinct
 from .interrupt import InterruptController
 from .output_slot import OutputSlot
 from .utterance import Utterance, UtteranceState
@@ -170,6 +171,18 @@ class AgentLoop:
         self._play_clip_duration: float = 0.0
         # P2-3：跳过当前播放标志（供 skip 端点使用）
         self._skip_requested = False
+        # 空闲本能微动作循环（IDLE 状态下周期性微小 OSC 动作）
+        self._idle_instinct: IdleInstinct | None = None
+        # 仅在 actuator 暴露 _mapper 时创建（MCPOSCActuator；NoopActuator 无）
+        _mapper = getattr(self._actuator, '_mapper', None)
+        if _mapper is not None and self._config is not None:
+            try:
+                self._idle_instinct = IdleInstinct(
+                    self._actuator, _mapper, self._config.agent.idle_instinct,
+                )
+                logger.info("空闲本能已初始化")
+            except Exception:
+                logger.warning("空闲本能初始化失败，禁用", exc_info=True)
 
     # ------------------------------------------------------------------
     # 只读属性（供仪表盘/测试）
@@ -293,6 +306,12 @@ class AgentLoop:
         """请求停止主循环。"""
         self._stop_event.set()
 
+    async def close(self) -> None:
+        """关闭主循环：停止空闲本能 + 设置停止事件。"""
+        if self._idle_instinct is not None:
+            await self._idle_instinct.stop()
+        self.stop()
+
     async def _consume(self, event_type: str, handler) -> None:
         """消费事件流：每个事件调度为独立任务（保证打断/急停可抢占）。"""
         async for event in self._bus.stream(event_type):
@@ -321,6 +340,10 @@ class AgentLoop:
         P0 重构：不再阻塞等待锁。ASR 产出直接进 LLM Stage（通过 Semaphore 限流）。
         打断/急停通过 Utterance.cancel_event 精准取消。
         """
+        # 新 utterance 到来 → 打断空闲本能
+        if self._idle_instinct is not None:
+            await self._idle_instinct.stop()
+
         if self._paused:
             logger.debug("主循环暂停中，忽略语音触发")
             return
@@ -415,6 +438,10 @@ class AgentLoop:
         LLM/TTS 通过 Semaphore 限流（可配置并发数）。
         错误隔离：单条失败不影响其他 utterance。
         """
+        # 有新的 pipeline 任务 → 停止空闲本能
+        if self._idle_instinct is not None:
+            await self._idle_instinct.stop()
+
         try:
             # ---- 阶段 0：检查取消 ----
             if utt.cancel_event.is_set():
@@ -649,6 +676,9 @@ class AgentLoop:
         ):
             if self._state in (AgentState.THINKING, AgentState.SPEAKING, AgentState.ACTION):
                 self._transition(AgentState.IDLE)
+                # 进入 IDLE 后启动空闲本能微动作循环
+                if self._idle_instinct is not None:
+                    asyncio.create_task(self._idle_instinct.start())
 
     # ------------------------------------------------------------------
     # 视觉校准（播放含 look 动作的 utterance 后触发）
@@ -691,6 +721,9 @@ class AgentLoop:
         """
         if self._state == AgentState.EMERGENCY_STOP:
             return
+        # 急停 → 停止空闲本能
+        if self._idle_instinct is not None:
+            await self._idle_instinct.stop()
         logger.warning("执行急停: 取消所有飞行中任务 + 静音输出 + 复位动作", extra={"event": "emergency_stop"})
         self._emergency_stopped = True
         # 需求 4：急停清空对话队列（丢弃未处理对话）

@@ -137,6 +137,17 @@ agent:
   utterance_queue:
     enabled: true
     max_batch: 3
+  idle_instinct:
+    enabled: true
+    interval_min_sec: 0.3
+    interval_max_sec: 0.7
+    jitter_min_deg: 1.0
+    jitter_max_deg: 3.0
+    look_overshoot_prob: 0.10
+    hesitate_prob: 0.30
+    small_step_move_prob: 0.15
+    move_duration_min_sec: 0.08
+    move_duration_max_sec: 0.15
 dashboard:
   enabled: true
   terminal: true

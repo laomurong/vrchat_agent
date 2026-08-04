@@ -314,6 +314,33 @@ class UtteranceQueueConfig(BaseModel):
     max_batch: int = 3
 
 
+class IdleInstinctConfig(BaseModel):
+    """空闲本能微动作循环配置（Idle Instinct Loop）。
+
+    IDLE 状态下周期性发送微小 OSC 动作（视角微抖、小步移动等），
+    模拟人类"活着"的感觉——不调用 LLM，纯随机触发。
+
+    所有字段均为热重载（保存 config 后 run_loop 下次 tick 读取最新值）。
+    """
+
+    enabled: bool = True
+    # 每次微动作间隔（秒），实际在 [min, max] 之间随机
+    interval_min_sec: float = Field(default=0.3, ge=0.05, le=5.0)
+    interval_max_sec: float = Field(default=0.7, ge=0.05, le=5.0)
+    # 视角微抖角度范围（度），近似值
+    jitter_min_deg: float = Field(default=1.0, ge=0.1, le=10.0)
+    jitter_max_deg: float = Field(default=3.0, ge=0.1, le=10.0)
+    # 过冲修正概率（叠在 jitter 上）
+    look_overshoot_prob: float = Field(default=0.10, ge=0.0, le=1.0)
+    # 停顿概率（本 tick 什么都不做）
+    hesitate_prob: float = Field(default=0.30, ge=0.0, le=1.0)
+    # 小步移动概率
+    small_step_move_prob: float = Field(default=0.15, ge=0.0, le=1.0)
+    # 小步移动 duration 范围（秒），极短，几乎看不出来
+    move_duration_min_sec: float = Field(default=0.08, ge=0.01, le=1.0)
+    move_duration_max_sec: float = Field(default=0.15, ge=0.01, le=1.0)
+
+
 class AgentConfig(BaseModel):
     loop: LoopConfig = Field(default_factory=LoopConfig)
     interrupt: InterruptConfig = Field(default_factory=InterruptConfig)
@@ -327,6 +354,8 @@ class AgentConfig(BaseModel):
     startup_check: bool = True
     # 对话队列 + 批量合并（需求 4）
     utterance_queue: UtteranceQueueConfig = Field(default_factory=UtteranceQueueConfig)
+    # 空闲本能微动作循环
+    idle_instinct: IdleInstinctConfig = Field(default_factory=IdleInstinctConfig)
 
 
 class DashboardConfig(BaseModel):
