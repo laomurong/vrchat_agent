@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
+import time
 
 from ..audio.audio_input import LOOPBACK_SUFFIX
 
@@ -82,6 +84,49 @@ def probe_supports_16k(index: int, is_input: bool, sd=None) -> bool:
     except Exception:
         pass
     return True
+
+
+# ---------------------------------------------------------------------------
+# A-25：设备枚举结果 TTL 缓存（5s）。list_audio_devices() 会对每个设备开流实测
+# 16k（probe_supports_16k，开销大），而设备插拔频率远低于 Web 查询频率；
+# 缓存 5s 可接受（热插拔容忍：5s 内新插设备不立即出现，任务约定）。线程安全
+# （uvicorn 多请求并发）。测试可用 _clear_devices_cache() 复位 / ttl<=0 绕过。
+# ---------------------------------------------------------------------------
+_DEVICES_CACHE_TTL = 5.0
+_devices_cache_lock = threading.Lock()
+_devices_cache_ts = 0.0
+_devices_cache_value: dict[str, list[dict]] = {"input": [], "output": []}
+
+
+def cached_list_audio_devices(ttl: float = _DEVICES_CACHE_TTL) -> dict[str, list[dict]]:
+    """带 TTL 缓存的设备枚举（Web GET /api/audio/devices 数据源，A-25）。
+
+    - ttl<=0 → 每次重新实测（测试/调试用）；
+    - 命中缓存返回新容器（内层条目为新建 dict，调用方修改返回值不影响缓存）；
+    - 未命中则调用 list_audio_devices() 实测并填充缓存。
+    """
+    global _devices_cache_ts, _devices_cache_value
+    if ttl > 0:
+        now = time.monotonic()
+        with _devices_cache_lock:
+            if now - _devices_cache_ts < ttl:
+                return {
+                    "input": list(_devices_cache_value["input"]),
+                    "output": list(_devices_cache_value["output"]),
+                }
+    value = list_audio_devices()
+    if ttl > 0:
+        with _devices_cache_lock:
+            _devices_cache_ts = time.monotonic()
+            _devices_cache_value = value
+    return value
+
+
+def _clear_devices_cache() -> None:
+    """清空设备枚举缓存（测试隔离：模拟设备插拔立即可见）。"""
+    global _devices_cache_ts
+    with _devices_cache_lock:
+        _devices_cache_ts = 0.0
 
 
 def list_audio_devices() -> dict[str, list[dict]]:

@@ -1251,6 +1251,7 @@ function renderPipelineData(payload) {
 // P2-3：跳过当前播放
 $("btn-skip").addEventListener("click", async () => {
   $("btn-skip").disabled = true;
+  const originalText = $("btn-skip").textContent;
   try {
     const resp = await fetch("/api/control/skip", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     const data = await resp.json();
@@ -1259,8 +1260,16 @@ $("btn-skip").addEventListener("click", async () => {
     }
   } catch (e) {
     console.warn("skip 网络错误:", e.message);
+  } finally {
+    // A-22：请求完成后立即复位 disabled=false（不依赖后续 PIPELINE_STATE SSE
+    // 事件恢复——失败/无事件时按钮也不被卡死）；FAB 按钮由 MutationObserver
+    // 自动同步。反馈文本"已跳过"短暂提示后恢复。
+    $("btn-skip").disabled = false;
+    $("btn-skip").textContent = "⏭ 已跳过";
+    setTimeout(() => {
+      if ($("btn-skip").textContent === "⏭ 已跳过") $("btn-skip").textContent = originalText;
+    }, 1500);
   }
-  setTimeout(() => {}, 100);
 });
 
 // ===========================================================================

@@ -33,6 +33,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # 不依赖 build_and_run 内部先执行 setup_logging。
 logger = logging.getLogger("vrchat_agent")
 
+# 模块级：最近一次进程级重启拉起的新进程引用（A-21）。仅保存引用供日志/诊断
+# （如崩溃报告可查 PID），**不管理生命周期**——restart 语义下该子进程是新的
+# agent 实例，旧进程退出后不得 terminate 它；新实例自行管理自身生命周期。
+_restart_proc: subprocess.Popen | None = None
+
 
 def _spawn_restart(config: Config) -> subprocess.Popen | None:
     """进程级重启：拉起新进程（继承 cwd/env），旧进程随即退出。
@@ -46,7 +51,10 @@ def _spawn_restart(config: Config) -> subprocess.Popen | None:
     - 时序：本函数在 build_and_run 的 finally（全部资源释放完成）之后调用——
       新进程启动时旧端口已释放，无需端口冲突重试；新进程继承 cwd/PYTHONPATH/env，
       配置路径经 --config 显式传入（不依赖环境变量残留）。
+    - A-21：Popen 引用保存到模块级 _restart_proc 供日志/诊断（PID 可查），
+      但不 terminate——新进程是新的 agent 实例，旧进程退出后不得杀它。
     """
+    global _restart_proc
     try:
         env = dict(os.environ)
         src_dir = str(PROJECT_ROOT / "src")
@@ -56,9 +64,11 @@ def _spawn_restart(config: Config) -> subprocess.Popen | None:
         env["PYTHONPATH"] = os.pathsep.join(parts)
         cmd = [sys.executable, "-m", "vrchat_agent.main", "--config", str(config.path)]
         proc = subprocess.Popen(cmd, cwd=str(PROJECT_ROOT), env=env)
+        _restart_proc = proc
         logger.info("已拉起新进程（pid=%s），旧进程即将退出", proc.pid, extra={"event": "restart"})
         return proc
     except Exception as exc:
+        _restart_proc = None
         logger.error("重启拉起新进程失败: %s", exc, extra={"event": "restart_failed"})
         return None
 

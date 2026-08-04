@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import socket
 import webbrowser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 import uvicorn
@@ -30,7 +32,7 @@ from ..config import Config
 from ..events import Event, EventBus, EventType
 from ..logging_setup import UsageTracker
 from . import schema as schema_mod
-from .audio_devices import list_audio_devices
+from .audio_devices import cached_list_audio_devices
 from .schema import ConfigValidationError, ConfigWriteError
 from .status import WebStatusStore
 
@@ -127,6 +129,62 @@ def _sse(event: str, data: Any) -> str:
 def _error(status: int, code: str, detail: Any) -> JSONResponse:
     """统一错误响应：{"ok": false, "error": ..., "detail": ...}。"""
     return JSONResponse(status_code=status, content={"ok": False, "error": code, "detail": detail})
+
+
+# ---------------------------------------------------------------------------
+# A-24：/api/voice/clone 参考音频 URL 基础校验（防 SSRF 面收口）。
+# 本地绑定（默认 host=127.0.0.1）下风险低，但用户改绑 0.0.0.0 后任意来访者
+# 可诱导服务端拉取任意 URL；这里加协议白名单 + 回环/云元数据地址黑名单。
+# voice_clone.py 内已有协议检查（400 之前不触发），此处 API 边界再兜一道，
+# 使非法 URL 返回清晰的 400 而非 500。仅做基础校验，不破坏正常 OSS 公网 URL。
+# ---------------------------------------------------------------------------
+_CLONE_URL_BLOCKED_HOSTS = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "169.254.169.254",  # AWS/GCP/Azure/阿里云 元数据服务地址
+        "metadata.google.internal",
+        "metadata.azure.internal",
+    }
+)
+
+
+def _validate_clone_audio_url(audio_url: str) -> str | None:
+    """校验克隆参考音频 URL（A-24）。通过返回 None，否则返回错误描述（400 detail）。
+
+    规则：
+    - 仅允许 http:// / https://（拒绝 file://、本地路径、其他 scheme）；
+    - 必须含主机名（拒绝裸路径/占位 URL）；
+    - 黑名单主机（localhost/127.0.0.1/::1/169.254.169.254 等元数据地址）拒绝；
+    - 数字 IP 额外用 ipaddress 判定：回环段（127.0.0.0/8）、链路本地段
+      （169.254.0.0/16、fe80::/10）拒绝（覆盖黑名单未列出的变体）。
+    """
+    url = str(audio_url or "").strip()
+    if not url:
+        return "缺少参考音频 URL（body.audio_url）"
+    lowered = url.lower()
+    if not lowered.startswith(("http://", "https://")):
+        return "参考音频 URL 必须是公网可访问的 http(s) 地址（不支持 file:// 或本地路径）"
+    try:
+        parsed = urlparse(url)
+    except (ValueError, TypeError):
+        return "参考音频 URL 无法解析"
+    if not parsed.scheme or not parsed.netloc:
+        return "参考音频 URL 缺少主机名（需完整 http(s) 地址）"
+    host = (parsed.hostname or "").strip().lower()
+    if not host:
+        return "参考音频 URL 缺少主机名"
+    if host in _CLONE_URL_BLOCKED_HOSTS:
+        return f"参考音频 URL 主机 {host!r} 已被禁止（不支持回环/云元数据地址）"
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        # 域名（非数字 IP）放行；DNS 重绑定等高级绕过不在本轮基础校验范围
+        return None
+    if ip.is_loopback or ip.is_link_local:
+        return f"参考音频 URL 主机 {host!r} 已被禁止（不支持回环/链路本地地址）"
+    return None
 
 
 def create_app(
@@ -226,11 +284,13 @@ def create_app(
     # ------------------------------------------------------------------
     # GET /api/audio/devices —— 枚举系统音频设备（输入/输出），供设备下拉框
     # 无可用声卡 / sounddevice 缺失 / CI 环境 → 空列表，前端回退编辑框
+    # A-25：走 5s TTL 缓存（每次实测所有设备 16k 兼容性开销大；设备插拔频率
+    # 远低于查询频率，缓存 5s 可接受）。
     # ------------------------------------------------------------------
     @app.get("/api/audio/devices")
     async def api_audio_devices() -> JSONResponse:
         try:
-            return JSONResponse(content=list_audio_devices())
+            return JSONResponse(content=cached_list_audio_devices())
         except Exception:
             logger.exception("GET /api/audio/devices 异常", extra={"event": "web_error"})
             return _error(500, "internal_error", "音频设备枚举失败")
@@ -650,6 +710,11 @@ def create_app(
         target_model = body.get("target_model")
         if not audio_url:
             return _error(400, "validation_error", "缺少参考音频 URL（body.audio_url，需公网可访问）")
+        # A-24：SSRF 面收口——协议白名单 + 回环/云元数据黑名单（voice_clone.py
+        # 内已有协议检查，此处 API 边界再兜一道，非法 URL 返回 400 而非 500）。
+        url_err = _validate_clone_audio_url(audio_url)
+        if url_err:
+            return _error(400, "validation_error", url_err)
         try:
             voice_id = await vc.create_voice(
                 target_model=target_model, prefix=prefix, audio_url=audio_url
