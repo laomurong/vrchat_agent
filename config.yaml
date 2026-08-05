@@ -191,4 +191,8 @@ nav:
   fingerprint_size: 32
   similarity_threshold: 0.85
   explore_interval_s: 30.0
+  # 空闲探索单轮循环步数上限（防失控；连续循环到无路可走/受阻/被打断为止）
+  explore_max_steps: 10
+  # 循环内每步之间的短暂间隔（秒，让动作系统喘息、避免截图竞争）
+  explore_step_gap_s: 0.3
   max_relocalize_attempts: 3

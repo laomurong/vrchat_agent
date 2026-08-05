@@ -38,6 +38,10 @@ from .topology import TopologyStore
 
 logger = logging.getLogger("vrchat_agent.nav")
 
+# 空闲探索连续无进展上限：连续 N 次未登记新节点（画面无变化/自环/回环空转）
+# → 本轮探索结束，防死循环（配合 explore_max_steps 双保险）。
+_MAX_CONSECUTIVE_NO_PROGRESS = 3
+
 __all__ = [
     "ExploreResult",
     "LandmarkFingerprinter",
@@ -314,16 +318,68 @@ class NavController:
     async def run_idle_explore(self) -> None:
         """空闲探索任务体（maybe_explore_coro 返回的协程）。
 
-        单次探索即返回；新语音/急停通过 stop_idle() 置位 cancel_event 打断。
+        P2-4 连续循环化：一步接一步探索登记新节点，每步检查——
+        1. ``cancel_event`` 置位（新语音/急停打断）→ 立即 break；
+        2. 达到 ``explore_max_steps``（默认 10）→ break；
+        3. ``explore_once`` 返回 success=False（无可用方向/判定受阻）→ break；
+        4. 连续 ``_MAX_CONSECUTIVE_NO_PROGRESS`` 次未登记新节点
+           （画面无变化/自环/回环空转）→ break 防死循环。
+        每步之间按 ``explore_step_gap_s``（默认 0.3s）短暂休息，让动作系统
+        喘息、避免截图竞争（VRChat 是 3D 实时画面，连续移动时轻微视角变化
+        不应被误判——由 explorer 的指纹匹配容忍度保证，循环不额外卡画面）。
+
+        整轮循环视为一次探索会话：结束后（含被打断）才更新
+        ``_last_explore_ts`` 与 ``_idle_exploring=False``，冷却只作用于会话之间。
         """
         try:
             if self._explorer is None:
                 logger.warning("空闲探索跳过：组件未就绪")
                 return
-            result = await self._explorer.explore_once(
-                self._capture, self._run_step, cancel_event=self._idle_cancel
-            )
-            logger.info("空闲探索完成: %s（success=%s）", result.message, result.success)
+            cfg = self._cfg()
+            try:
+                max_steps = max(1, int(getattr(cfg, "explore_max_steps", 10)))
+            except Exception:  # noqa: BLE001 - 配置异常 → 回退默认步数上限
+                max_steps = 10
+            try:
+                step_gap = max(0.0, float(getattr(cfg, "explore_step_gap_s", 0.3)))
+            except Exception:  # noqa: BLE001 - 配置异常 → 回退默认步间间隔
+                step_gap = 0.3
+
+            steps_done = 0
+            consecutive_no_progress = 0
+            while steps_done < max_steps:
+                # 检查点 1：语音/急停打断（每步开始前）
+                if self._idle_cancel.is_set():
+                    logger.info("探索被语音/急停打断（第 %d 步前停止）", steps_done)
+                    break
+                result = await self._explorer.explore_once(
+                    self._capture, self._run_step, cancel_event=self._idle_cancel
+                )
+                steps_done += 1
+                logger.info("空闲探索 [%d/%d] 完成: %s（success=%s）",
+                            steps_done, max_steps, result.message, result.success)
+                # 检查点 2：探索途中被打断（explore_once 内部动作循环已让位）
+                if self._idle_cancel.is_set():
+                    logger.info("探索被语音/急停打断（第 %d 步后停止）", steps_done)
+                    break
+                # 检查点 3：无可用方向 / 判定受阻 → 已无路可走
+                if not result.success:
+                    logger.info("探索无可用方向或判定受阻（success=False），本轮探索结束")
+                    break
+                # 检查点 4：连续无进展（画面无变化/自环）→ 防死循环
+                if result.new_node_id is not None:
+                    consecutive_no_progress = 0
+                else:
+                    consecutive_no_progress += 1
+                    if consecutive_no_progress >= _MAX_CONSECUTIVE_NO_PROGRESS:
+                        logger.info("连续 %d 次无新节点（画面无变化/自环），本轮探索结束",
+                                    _MAX_CONSECUTIVE_NO_PROGRESS)
+                        break
+                if step_gap > 0:
+                    await asyncio.sleep(step_gap)
+            else:
+                # 检查点 5：自然跑满 explore_max_steps（while-else：未 break）
+                logger.info("达到探索步数上限（%d 步），本轮探索结束", max_steps)
         except asyncio.CancelledError:
             pass
         except Exception:
