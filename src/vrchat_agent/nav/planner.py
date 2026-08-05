@@ -32,6 +32,11 @@ CaptureFn = Callable[[], Awaitable[bytes | None]]
 # 类型别名：异步单步动作执行器（step: {"tool": ..., "args": {...}}）
 RunStepFn = Callable[[dict], Awaitable[None]]
 
+# P0-3：全局步数上限默认值（总执行步数超过即判定导航失败，防 A↔B 无限循环）
+_DEFAULT_MAX_TOTAL_STEPS = 50
+# P0-3：振荡检测窗口默认值（最近 N 个定位节点仅在 2 个节点间来回 → 判定振荡）
+_DEFAULT_OSCILLATION_WINDOW = 6
+
 
 @dataclass
 class NavigateResult:
@@ -56,6 +61,8 @@ class NavPlanner:
         fingerprinter: LandmarkFingerprinter,
         similarity_threshold: float = 0.85,
         max_relocalize_attempts: int = 3,
+        max_total_steps: int = _DEFAULT_MAX_TOTAL_STEPS,
+        oscillation_window: int = _DEFAULT_OSCILLATION_WINDOW,
     ) -> None:
         """初始化规划器。
 
@@ -64,11 +71,16 @@ class NavPlanner:
             fingerprinter: 指纹器（截图 → 指纹 bytes，相似度比较）。
             similarity_threshold: 指纹匹配阈值（[0,1]，越大越严格）。
             max_relocalize_attempts: 每步重定位最大重试次数。
+            max_total_steps: 全局总步数上限（P0-3，默认 50），超过即失败。
+            oscillation_window: 振荡检测窗口（P0-3，默认 6）——最近 N 个定位节点
+                只在 2 个节点间来回交替 → 判定振荡（A↔B 死循环），放弃导航。
         """
         self._store = store
         self._fpr = fingerprinter
         self._threshold = max(0.0, min(1.0, float(similarity_threshold)))
         self._max_retries = max(0, int(max_relocalize_attempts))
+        self._max_total_steps = max(1, int(max_total_steps))
+        self._osc_window = max(3, int(oscillation_window))
 
     # ------------------------------------------------------------------
     # 指纹匹配
@@ -227,8 +239,16 @@ class NavPlanner:
         steps_taken = 0
         retries = 0
         i = 0
+        # P0-3：振荡检测——记录最近定位到的节点 id（含起点），用于识别 A↔B 来回
+        recent_positions: deque[int | None] = deque(maxlen=self._osc_window)
+        recent_positions.append(cur_id)
         # path 从 cur_id 开始；逐段推进（i 为当前段起点在 path 中的下标）
         while i < len(path) - 1:
+            # P0-3：全局步数预算——总执行步数超过上限即失败（防 A↔B 无限循环）
+            if steps_taken > self._max_total_steps:
+                return NavigateResult(False, path=path, steps_taken=steps_taken,
+                                      retries=retries,
+                                      message=f"导航步数超过全局预算（>{self._max_total_steps} 步），放弃")
             frm, to = path[i], path[i + 1]
             edge = self._store.get_edge(frm, to)
             if edge is None:
@@ -253,6 +273,12 @@ class NavPlanner:
                 return NavigateResult(False, path=path, steps_taken=steps_taken,
                                       retries=retries, message="执行后无法获取画面指纹")
             matched, sim = self.match_node(fp)
+            # P0-3：记录本次定位节点，检测振荡（最近 N 步只在 2 个节点间来回交替）
+            recent_positions.append(matched if matched is not None else frm)
+            if self._detect_oscillation(recent_positions):
+                return NavigateResult(False, path=path, steps_taken=steps_taken,
+                                      retries=retries,
+                                      message="检测到振荡（在 2 个节点间来回），放弃导航")
             if matched == to:
                 # 到达预期下一节点 → 前进
                 i += 1
@@ -276,3 +302,19 @@ class NavPlanner:
 
         return NavigateResult(True, path=path, steps_taken=steps_taken,
                               retries=retries, message=f"导航成功（途经 {len(path)} 个节点）")
+
+    @staticmethod
+    def _detect_oscillation(recent: deque[int | None]) -> bool:
+        """检测最近 N 个定位节点是否在 2 个节点间来回交替（A↔B 振荡）。
+
+        P0-3：窗口满且仅含 2 个互异节点、且相邻节点互不相同（纯交替）→ 振荡。
+        起点未知（None）也参与判定（未知↔已知来回同样算振荡）。
+        """
+        if len(recent) < recent.maxlen:
+            return False
+        uniq = {x for x in recent}
+        if len(uniq) != 2:
+            return False
+        items = list(recent)
+        # 仅含 2 个互异节点且相邻互不相同 → 必然 A,B,A,B,... 交替
+        return all(a != b for a, b in zip(items[:-1], items[1:]))

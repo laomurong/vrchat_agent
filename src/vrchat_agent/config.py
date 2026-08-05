@@ -438,7 +438,9 @@ class NavConfig(BaseModel):
     - fingerprint_size：指纹灰度池化边长（默认 32，特征向量 = size²+12 维）；
     - similarity_threshold：指纹匹配/回环阈值（[0,1]，越大越严格）；
     - explore_interval_s：空闲探索最小间隔（秒，节流防频繁挪动）；
-    - max_relocalize_attempts：每步重定位最大重试次数（超限放弃该边）。
+    - max_relocalize_attempts：每步重定位最大重试次数（超限放弃该边）；
+    - max_total_steps：导航全局总步数上限（防 A↔B 振荡死循环，默认 50）；
+    - max_self_loops：探索连续自环上限（防死胡同空转，默认 3）。
     属装配期读取（改后需重启）；无明文 key。
     """
 
@@ -448,6 +450,8 @@ class NavConfig(BaseModel):
     similarity_threshold: float = 0.85
     explore_interval_s: float = 30.0
     max_relocalize_attempts: int = 3
+    max_total_steps: int = 50
+    max_self_loops: int = 3
 
 
 class AppConfig(BaseModel):

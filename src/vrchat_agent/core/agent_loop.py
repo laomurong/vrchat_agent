@@ -776,11 +776,22 @@ class AgentLoop:
                     self._publish_pipeline_state()
                     continue
 
-            utt = await self._output_slot.wait_and_play(
-                play_func=self._run_play,
-                exec_func=self._safe_exec,
-                on_start=_on_play_start,
-            )
+            try:
+                utt = await self._output_slot.wait_and_play(
+                    play_func=self._run_play,
+                    exec_func=self._safe_exec,
+                    on_start=_on_play_start,
+                )
+            except asyncio.CancelledError:
+                # P1-2：防御性重建消费循环——wait_and_play 内部已把播放中的
+                # CancelledError 转为"取消 utterance 后返回"，此处兜底捕获任何
+                # 泄漏到 drain 层的取消信号：若仍在运行（打断/急停场景）→
+                # 重建消费循环继续；若确实停机（stop()/emergency 置 running=False）
+                # → 正常退出，不吞掉停机取消。
+                if not self._running:
+                    raise
+                logger.debug("drain 消费被取消（打断/急停），重建消费循环")
+                continue
             if utt is None:
                 # 输出槽暂不可用（急停窗口）：事件阻塞等待复位（A-01，替代 50ms 轮询）
                 await self._output_slot.wait_until_ready()

@@ -150,8 +150,15 @@ class NavController:
             self._fingerprinter,
             similarity_threshold=float(cfg.similarity_threshold),
             max_relocalize_attempts=int(cfg.max_relocalize_attempts),
+            max_total_steps=int(getattr(cfg, "max_total_steps", 50)),
+            oscillation_window=6,
         )
-        self._explorer = NavExplorer(self._store, self._planner, self._fingerprinter)
+        self._explorer = NavExplorer(
+            self._store,
+            self._planner,
+            self._fingerprinter,
+            max_self_loops=int(getattr(cfg, "max_self_loops", 3)),
+        )
         self._ready = True
         logger.info("空间导航已就绪: db=%s threshold=%.3f", self._store.db_path,
                     float(cfg.similarity_threshold))

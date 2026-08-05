@@ -138,9 +138,16 @@ class OutputSlot:
                     exec_func(utt.chatbox_actions),
                 )
             except asyncio.CancelledError:
-                # 播放中被取消（打断/急停）
+                # P1-2：播放中被取消（打断/急停/任务取消）。
+                # 修复前 re-raise 会把 CancelledError 击穿到 _drain_output_slot，
+                # 使输出队列消费循环永久停摆（打断后 Agent 失声）。
+                # 修复后：标记 utterance 已取消并按"播放完成"返回——由调用方
+                # （drain）走收尾逻辑（A-02 补发 TTS_FINISHED 解除静音窗口），
+                # 消费循环自然继续；若外层任务确实在停机取消，drain 的
+                # ``while self._running`` 会在下一轮退出。
                 logger.debug("播放被取消: %s", utt.id)
-                raise
+                utt.state = UtteranceState.CANCELLED
+                return utt
             except Exception:
                 logger.exception("播放 gather 异常: %s", utt.id)
             finally:

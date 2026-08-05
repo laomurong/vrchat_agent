@@ -204,7 +204,7 @@ class FallbackTTSEngine(TTSEngine):
             raise TTSError("TTS 文本为空")
         try:
             return await self._primary.synthesize(text, emotion)
-        except TTSError as primary_exc:
+        except Exception as primary_exc:  # noqa: BLE001 - P2：非 TTSError（网络/解析/断言等）也触发回退
             logger.warning(
                 "主 TTS 引擎失败，自动回退备用引擎: %s",
                 primary_exc,
@@ -212,7 +212,7 @@ class FallbackTTSEngine(TTSEngine):
             )
             try:
                 return await self._fallback.synthesize(text, emotion)
-            except TTSError as fallback_exc:
+            except Exception as fallback_exc:  # noqa: BLE001 - 两引擎均失败 → 统一包装 TTSError
                 raise TTSError(
                     f"TTS 主备引擎均失败（主: {primary_exc}；备: {fallback_exc}）"
                 ) from fallback_exc

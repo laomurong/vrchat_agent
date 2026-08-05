@@ -245,6 +245,33 @@ def schema_payload() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # 掩码 / 写盘载荷
 # ---------------------------------------------------------------------------
+def _auto_sensitive_paths() -> list[str]:
+    """自动推导敏感字段路径：所有叶子字段名为 ``api_key`` 或 ``obs_password``。
+
+    P1-3：以 ``config.py`` 的 pydantic 模型为唯一事实源——今后新增任何
+    api_key 字段（含 tts_mimo / tts_cosyvoice / vrcapi 等子节）都会被自动纳入
+    掩码与写盘剔除范围，杜绝手写 SENSITIVE_PATHS 漏项。仅匹配叶子名恰为
+    ``api_key``（不含 ``api_key_env``——那只是环境变量名，不是密钥本身）。
+    """
+    paths: list[str] = []
+    for path in _iter_leaf_paths(AppConfig):
+        leaf = path.rsplit(".", 1)[-1]
+        if leaf == "api_key" or leaf == "obs_password":
+            paths.append(path)
+    return paths
+
+
+def _all_sensitive_paths() -> list[str]:
+    """SENSITIVE_PATHS ∪ 自动推导（去重保序）——掩码/写盘剔除统一使用。"""
+    seen: set[str] = set()
+    result: list[str] = []
+    for path in list(SENSITIVE_PATHS) + _auto_sensitive_paths():
+        if path not in seen:
+            seen.add(path)
+            result.append(path)
+    return result
+
+
 def _mask_api_key(value: Any) -> str:
     """掩码 api_key：保留前 3 位 + *** + 后 4 位；空值返回空串。"""
     if not value:
@@ -276,9 +303,13 @@ def _resolve_parent(data: dict[str, Any], path: str) -> tuple[dict[str, Any] | N
 
 
 def mask_config(data: dict[str, Any]) -> dict[str, Any]:
-    """深拷贝并对敏感路径掩码（GET /api/config 用）。"""
+    """深拷贝并对敏感路径掩码（GET /api/config 用）。
+
+    P1-3：掩码范围 = SENSITIVE_PATHS ∪ 自动推导的 api_key/obs_password 叶子路径，
+    确保所有密钥字段（含未来新增）都被掩码。
+    """
     result = _deep_copy(data)
-    for path in SENSITIVE_PATHS:
+    for path in _all_sensitive_paths():
         node, key = _resolve_parent(result, path)
         if node is not None and key in node:
             if path.endswith("obs_password"):
@@ -293,24 +324,16 @@ def build_write_payload(validated: AppConfig) -> dict[str, Any]:
 
     A-05：obs_password 与 api_key 同策略——写盘时剔除，永不明文落盘
     （config.yaml 被 git 追踪，写回真实值即泄密）；保存后经 Config._apply_env
-    从 OBS_PASSWORD 环境变量重新注入。
+    从环境变量重新注入。
+
+    P1-3：剔除范围 = SENSITIVE_PATHS ∪ 自动推导的 api_key/obs_password 叶子路径，
+    保证所有密钥字段（含 tts_mimo / tts_cosyvoice / 未来新增）都不落盘。
     """
     data = validated.model_dump()
-    llm = data.get("brain", {}).get("llm", {})
-    if isinstance(llm, dict):
-        llm.pop("api_key", None)
-    tts = data.get("speech", {}).get("tts", {})
-    if isinstance(tts, dict):
-        tts.pop("api_key", None)
-        mimo = tts.get("tts_mimo")
-        if isinstance(mimo, dict):
-            mimo.pop("api_key", None)
-        cosy = tts.get("tts_cosyvoice")
-        if isinstance(cosy, dict):
-            cosy.pop("api_key", None)
-    sensor = data.get("vision", {}).get("sensor", {})
-    if isinstance(sensor, dict):
-        sensor.pop("obs_password", None)
+    for path in _all_sensitive_paths():
+        node, key = _resolve_parent(data, path)
+        if node is not None and key in node:
+            node.pop(key, None)
     return data
 
 
