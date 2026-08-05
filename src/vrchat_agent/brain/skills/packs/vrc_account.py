@@ -12,6 +12,7 @@ PACK = SkillPack(
         "我的信息", "status", "notification", "favorite", "account",
     ),
     description=(
+        "【调用时 kind 固定为 'vrc'，本条目的动作用 params.name】\n"
         "VRChat 账号/状态/通知/收藏查询（联网 API，需已登录；约 1 次/60 秒全局限速，"
         "一次只输出一个 vrc 动作）：\n"
         "- 更新在线状态 → {\"kind\":\"vrc\",\"params\":{\"name\":\"set_status\","

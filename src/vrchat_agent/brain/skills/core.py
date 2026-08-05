@@ -36,10 +36,21 @@ MINIMAL_ACTION_KINDS: str = (
     "avatar(自身状态: mute=切换麦克风静音)"
 )
 
-MINIMAL_RULES: str = """- 只输出 JSON，不要输出任何其他文字、注释或 Markdown 代码块。
+#: 常驻 kind 字段规则（BugFix：LLM 把技能块名当成 kind 输出 →
+#: schema 拒绝整条决策 → 降级不回应；prompt 必须先讲清楚）。
+#: 注意：不要在此处写具体技能块名（如 vrc.social）——常驻规则会在普通聊天
+#: 时也注入，测试契约要求普通聊天不出现技能块名。
+KIND_FIELD_RULE: str = (
+    "- ⚠️ actions 里 kind 字段只能取这 11 个值之一：emote/gesture/move/jump/look/pose/chatbox/"
+    "input/avatar/vrc/nav。技能块名（如【技能块：xxx】注入标题里的名字）**不是 kind**！"
+    "用 vrc 相关能力时 kind 永远写 'vrc'，具体动作写在 params.name（如 list_friends）。"
+)
+
+MINIMAL_RULES: str = f"""- 只输出 JSON，不要输出任何其他文字、注释或 Markdown 代码块。
 - 玩家在和你说话 → respond=true；纯背景噪音/无意义内容 → respond=false。
 - 视觉画面仅作上下文参考：玩家没问画面时不要主动描述画面；玩家问及画面时才描述。
 - actions 中 kind 必须属于上面列出的类型；params.name 必须使用列出的枚举值。
+{KIND_FIELD_RULE}
 - 玩家明确要求移动/转向/姿态/交互时，你**必须**在 actions 数组中包含对应的动作。只回复文字不算完成指令。无法确定的参数使用默认值（如方向不确定用 forward，duration 用 0.8）。
 - ⚠️ 玩家说的每一个动作意图（走/跑/转/蹲/坐/挥手/拿/放/看/跳），你都必须输出对应的 actions 条目。这是硬性要求。
 - emotion 取 calm/happy/sad/angry/surprised/neutral 之一。
@@ -48,10 +59,11 @@ MINIMAL_RULES: str = """- 只输出 JSON，不要输出任何其他文字、注�
 # ---------------------------------------------------------------------------
 # 全量规则常量（full 渲染兼容；与历史 build_decision_instruction 的【规则】逐字一致）
 # ---------------------------------------------------------------------------
-FULL_RULES: str = """- 严禁使用 Markdown 代码围栏（``` 或 ```json）包裹 JSON，直接输出 JSON 本体。
+FULL_RULES: str = f"""- 严禁使用 Markdown 代码围栏（``` 或 ```json）包裹 JSON，直接输出 JSON 本体。
 - 玩家在和你说话 → respond=true；纯背景噪音/无意义内容 → respond=false。
 - 视觉画面仅作上下文参考：玩家没问画面时不要主动描述画面；玩家问及画面时才描述。
 - actions 中 kind 必须属于上面列出的类型；params.name 必须使用上面列出的枚举值（如 emote 的 wave）。
+{KIND_FIELD_RULE}
 - 玩家明确要求移动/转向/姿态/交互时，你**必须**在 actions 数组中包含对应的动作。只回复文字不算完成指令。无法确定的参数使用默认值（如方向不确定用 forward，duration 用 0.8）。
 - ⚠️ 玩家说的每一个动作意图（走/跑/转/蹲/坐/挥手/拿/放/看/跳），你都必须输出对应的 actions 条目。这是硬性要求。
 - emotion 取 calm/happy/sad/angry/surprised/neutral 之一。

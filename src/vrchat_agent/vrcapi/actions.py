@@ -43,6 +43,79 @@ TRUNCATE_MAX: int = 20
 #: （如 `query: "{query}"`），executor 必须识别并视为缺失，绝不泄漏给 SDK。
 _PLACEHOLDER_RE: re.Pattern[str] = re.compile(r"\{[^{}]*\}")
 
+#: 标准 vrc_* 工具名全集（run() 派发白名单；未知工具返回清晰错误而非抛异常，
+#: BugFix：让 LLM 下一轮能纠正，不因单个未知动作导致整轮失败）。
+_VRC_TOOLS: frozenset[str] = frozenset(
+    {
+        "vrc_change_avatar",
+        "vrc_list_friends",
+        "vrc_search_world",
+        "vrc_set_status",
+        "vrc_get_current_user",
+        "vrc_get_own_avatar",
+        "vrc_search_users",
+        "vrc_get_user",
+        "vrc_friend",
+        "vrc_accept_friend_request",
+        "vrc_invite_user",
+        "vrc_get_notifications",
+        "vrc_get_favorites",
+        "vrc_get_recent_worlds",
+        "vrc_get_instance",
+        "vrc_call_api",
+    }
+)
+
+#: 工具/动作名别名 → 标准工具（用户实测 LLM 爱写 friends_online/friends 等）。
+#: 兼容三种形态：标准工具名 / 别名 / 裸精选动作名（list_friends）。
+_VRC_TOOL_ALIASES: dict[str, str] = {
+    "friends_online": "vrc_list_friends",
+    "friends": "vrc_list_friends",
+    "list_friends": "vrc_list_friends",
+    "list_friend": "vrc_list_friends",
+    "friend_list": "vrc_list_friends",
+    "online_friends": "vrc_list_friends",
+    "search_worlds": "vrc_search_world",
+    "search_world": "vrc_search_world",
+    "change_status": "vrc_set_status",
+    "set_status": "vrc_set_status",
+    "vrc_friends_online": "vrc_list_friends",
+    "vrc_friends": "vrc_list_friends",
+    "vrc_list_friend": "vrc_list_friends",
+    "vrc_friend_list": "vrc_list_friends",
+    "vrc_online_friends": "vrc_list_friends",
+    "vrc_search_worlds": "vrc_search_world",
+    "vrc_change_status": "vrc_set_status",
+}
+
+#: 错误提示用的可用工具名列表（精选动作 + call_api，供 LLM 下一轮纠正）。
+_VRC_TOOLS_TEXT: str = (
+    "vrc_change_avatar / vrc_list_friends / vrc_search_world / vrc_set_status / "
+    "vrc_get_current_user / vrc_get_own_avatar / vrc_search_users / vrc_get_user / "
+    "vrc_friend / vrc_accept_friend_request / vrc_invite_user / vrc_get_notifications / "
+    "vrc_get_favorites / vrc_get_recent_worlds / vrc_get_instance / vrc_call_api"
+)
+
+
+def _resolve_vrc_tool(tool: str) -> str | None:
+    """把工具名/动作名归一化为标准 ``vrc_*`` 工具名（未知返回 None）。
+
+    兼容三种形态：
+    1) 标准工具名（vrc_list_friends）→ 原样；
+    2) 别名（vrc_friends_online / friends_online / friends）→ 归一化；
+    3) 裸精选动作名（list_friends）→ 补 ``vrc_`` 前缀。
+    """
+    t = (tool or "").strip()
+    if t in _VRC_TOOLS:
+        return t
+    if t in _VRC_TOOL_ALIASES:
+        return _VRC_TOOL_ALIASES[t]
+    if t and not t.startswith("vrc_"):
+        cand = "vrc_" + t
+        if cand in _VRC_TOOLS:
+            return cand
+    return None
+
 
 def _to_int(value: Any, default: int, field: str) -> int:
     """把参数安全转 int（非法/空回退默认；负数回退默认，防御性）。"""
@@ -366,11 +439,24 @@ class VRCActionExecutor:
         """按动作映射工具名执行（MCPOSCActuator 对 vrc_* 工具调用本方法）。
 
         :param tool: 映射表工具名，如 vrc_change_avatar / vrc_list_friends /
-                     vrc_search_world / vrc_set_status / vrc_call_api
+                     vrc_search_world / vrc_set_status / vrc_call_api；
+                     兼容常见别名（friends_online/friends→vrc_list_friends，
+                     BugFix：用户实测 LLM 爱这么写）与裸精选动作名
+                     （list_friends→vrc_list_friends）
         :param args: 映射表 args（经 ActionMapper 填充 {param} 占位符）
-        :returns: 统一 dict；未知工具 / 参数缺失抛 VRCAPIError
+        :returns: 统一 dict；未知工具返回 ``{"ok": False, "message": ...}``
+                  （含可用动作列表，供 LLM 下一轮纠正；**不抛异常**导致整轮失败）
         """
         args = dict(args or {})
+        resolved = _resolve_vrc_tool(tool)
+        if resolved is None:
+            logger.warning("未知 vrc 动作/工具: %s", tool)
+            return {
+                "ok": False,
+                "action": str(tool or ""),
+                "message": f"未知 vrc 动作 {tool}，可用：{_VRC_TOOLS_TEXT}",
+            }
+        tool = resolved
         if tool == "vrc_change_avatar":
             return await self.change_avatar(str(args.get("avatar_id", "") or ""))
         if tool == "vrc_list_friends":
@@ -424,10 +510,11 @@ class VRCActionExecutor:
                 api=str(args.get("api", "") or ""),
                 args=_coerce_args_dict(args.get("args")),
             )
-        raise VRCAPIError(
-            f"未知 vrc 工具: {tool}（可用: vrc_change_avatar / vrc_list_friends / "
-            "vrc_search_world / vrc_set_status / vrc_get_current_user / vrc_get_own_avatar / "
-            "vrc_search_users / vrc_get_user / vrc_friend / vrc_accept_friend_request / "
-            "vrc_invite_user / vrc_get_notifications / vrc_get_favorites / "
-            "vrc_get_recent_worlds / vrc_get_instance / vrc_call_api）"
-        )
+        # 防御：resolved 必在 _VRC_TOOLS 且上方全部分支已覆盖；万一漏配
+        # （新增工具未加分支）返回清晰错误而非抛异常，避免整轮失败。
+        logger.error("vrc 工具未派发（内部漏配分支）: %s", tool)
+        return {
+            "ok": False,
+            "action": tool,
+            "message": f"vrc 工具 {tool} 未派发（内部配置缺失），可用：{_VRC_TOOLS_TEXT}",
+        }

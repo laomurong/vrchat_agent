@@ -12,6 +12,7 @@ PACK = SkillPack(
         "好友申请", "friend", "invite", "加为好友",
     ),
     description=(
+        "【调用时 kind 固定为 'vrc'，本条目的动作用 params.name】\n"
         "VRChat 社交操作（联网 API，需已登录；真实网络请求，约 1 次/60 秒全局限速，"
         "一次只输出一个 vrc 动作）：\n"
         "- 查好友列表 → {\"kind\":\"vrc\",\"params\":{\"name\":\"list_friends\"}}（例：「帮我查好友」）\n"

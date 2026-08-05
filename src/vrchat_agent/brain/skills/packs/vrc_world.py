@@ -12,6 +12,7 @@ PACK = SkillPack(
         "实例", "instance",
     ),
     description=(
+        "【调用时 kind 固定为 'vrc'，本条目的动作用 params.name】\n"
         "VRChat 世界/房间/实例查询（联网 API，需已登录；约 1 次/60 秒全局限速，"
         "一次只输出一个 vrc 动作）：\n"
         "- 搜索世界 → {\"kind\":\"vrc\",\"params\":{\"name\":\"search_world\","

@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger("vrchat_agent.brain.schema")
 
@@ -37,6 +37,52 @@ ActionKind = Literal[
     "emote", "gesture", "move", "jump", "look", "pose", "chatbox", "input", "avatar", "vrc", "nav"
 ]
 
+#: VRChat 技能块名（prompt 注入的技能块标识）。LLM 常把技能块名（vrc.social 等）
+#: 误写成 kind 或 params.name，导致 pydantic literal_error 拒绝**整条** Decision
+#: → 降级不回应（用户实测：kind="vrc.account" 好友查询 3 次全失败）。
+#: 这些名字**不是** ActionKind，只是技能块标识。
+_VRC_SKILL_NAMES: frozenset[str] = frozenset(
+    {"vrc.account", "vrc.social", "vrc.avatar", "vrc.world", "vrc.call_api"}
+)
+
+#: 技能块名 → 精选动作名（params.name 误写技能块名时归一化，如
+#: {"kind":"vrc","params":{"name":"vrc.social"}} → name="list_friends"）。
+_VRC_SKILL_TO_ACTION: dict[str, str] = {
+    "vrc.social": "list_friends",  # 社交最常见查询：好友列表
+    "vrc.account": "get_current_user",  # 账号最常见查询：当前用户信息
+    "vrc.avatar": "get_own_avatar",  # 头像最常见查询：当前使用头像
+    "vrc.world": "search_world",  # 世界最常见查询：搜索世界
+    "vrc.call_api": "call_api",  # 通用层
+}
+
+
+def _normalize_kind(kind: Any) -> Any:
+    """把 LLM 误写的 ``vrc.*`` 技能块名归一化为 ``vrc``（其余原样返回）。
+
+    BugFix（用户实测）：LLM 输出 ``{"kind":"vrc.account",...}`` 被 ActionKind
+    白名单拒绝 → 整条 Decision 降级不回应。只归一化 ``vrc.`` 前缀（技能块名），
+    不放宽白名单——真正非法的 kind（如 "foo"）仍被 pydantic 拒绝。
+    """
+    if isinstance(kind, str):
+        k = kind.strip()
+        if k.startswith("vrc."):
+            return "vrc"
+    return kind
+
+
+def _normalize_params_name(name: Any) -> Any:
+    """把 ``params.name`` 误写的技能块名归一化为对应精选动作名（其余原样返回）。
+
+    只归一化已知技能块名；LLM 的其它别名（如 friends_online / friends）保持原值，
+    由 ActionMapper / VRCActionExecutor 层容错归一化（executor 层见
+    vrcapi/actions.py 的 _VRC_TOOL_ALIASES）。
+    """
+    if isinstance(name, str):
+        n = name.strip()
+        if n in _VRC_SKILL_TO_ACTION:
+            return _VRC_SKILL_TO_ACTION[n]
+    return name
+
 
 class Action(BaseModel):
     """一条动作指令。"""
@@ -44,6 +90,33 @@ class Action(BaseModel):
     kind: ActionKind
     params: dict = Field(default_factory=dict)
     priority: int = 0  # 数字越大越先执行
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_vrc_kind(cls, data: Any) -> Any:
+        """宽容归一化钩子：``vrc.*`` 技能块名误写为 kind/name 时自动修正。
+
+        背景（用户实测 BugFix）：LLM 把技能块名（vrc.account/vrc.social/
+        vrc.avatar/vrc.world/vrc.call_api）当成 kind 值输出 → pydantic
+        literal_error 拒绝**整条** Decision → respond=False 降级不回应
+        （连回复文本都丢）。修复：
+        - kind 为 ``vrc.*`` 前缀 → 归一化为 ``vrc``（params.name 保持 LLM 意图）；
+        - params.name 为技能块名 → 归一化为对应精选动作名；
+        - 真正非法的 kind（如 "foo"）**仍被拒绝**——只做 ``vrc.*`` 前缀归一化，
+          不放宽成"任意字符串都接受"。
+        """
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        if "kind" in out:
+            out["kind"] = _normalize_kind(out["kind"])
+        params = out.get("params")
+        if isinstance(params, dict):
+            p = dict(params)
+            if "name" in p:
+                p["name"] = _normalize_params_name(p["name"])
+            out["params"] = p
+        return out
 
 
 class Decision(BaseModel):

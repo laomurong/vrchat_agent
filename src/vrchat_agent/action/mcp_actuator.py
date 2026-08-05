@@ -184,7 +184,16 @@ class MCPOSCActuator(Actuator):
         except Exception as exc:
             logger.warning("VRChat API 工具调用失败 %s: %s", cmd.tool, exc)
             raise ActuatorError(f"VRChat API 工具调用失败 {cmd.tool}: {exc}") from exc
-        logger.debug("VRChat API 工具调用成功: %s -> %s", cmd.tool, result)
+        if isinstance(result, dict) and result.get("ok") is False:
+            # BugFix：executor 对未知 vrc 动作返回 {ok:False, message}（不抛异常）。
+            # 这里 WARNING 可见化，不阻断本轮其它动作/回复。
+            logger.warning(
+                "VRChat API 工具返回错误: %s -> %s",
+                cmd.tool,
+                result.get("message", result),
+            )
+        else:
+            logger.debug("VRChat API 工具调用成功: %s -> %s", cmd.tool, result)
 
     async def _send_key(self, cmd: OSCCommand) -> None:
         """执行一条键盘注入命令（``tool: send_key``）。

@@ -11,6 +11,7 @@ PACK = SkillPack(
         "调用", "api", "接口", "查询接口", "call_api", "调用接口",
     ),
     description=(
+        "【调用时 kind 固定为 'vrc'，本条目的动作用 params.name】\n"
         "通用 VRChat API 调用（联网 API，需已登录；约 1 次/60 秒全局限速，"
         "一次只输出一个 vrc 动作；**只读优先**）：\n"
         "- 通用调用 → {\"kind\":\"vrc\",\"params\":{\"name\":\"call_api\","

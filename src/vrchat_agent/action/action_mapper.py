@@ -46,6 +46,24 @@ logger = logging.getLogger("vrchat_agent.action.mapper")
 # VRChat chatbox 有长度限制：超出 140 字符截断并补省略号（任务 2）。
 _CHATBOX_MAX_LEN = 140
 
+#: vrc 动作名常见别名（用户实测 LLM 爱写 friends_online/friends 而不是
+#: 精选动作名 list_friends；映射查找键统一归一化为精选动作名）。
+_VRC_NAME_ALIASES: dict[str, str] = {
+    "friends_online": "list_friends",
+    "friends": "list_friends",
+    "list_friend": "list_friends",
+    "online_friends": "list_friends",
+    "friend_list": "list_friends",
+    "search_worlds": "search_world",
+    "get_worlds": "search_world",
+    "change_status": "set_status",
+}
+
+
+def _normalize_vrc_name(name: str) -> str:
+    """vrc 动作名别名归一化（LLM 实测误写 → 精选动作名；未知原样返回）。"""
+    return _VRC_NAME_ALIASES.get(name, name)
+
 
 def _parse_repeat(value) -> int:
     """解析条目 repeat 字段（默认 1；非法/<=1 一律视为 1，防御性）。
@@ -252,6 +270,9 @@ class ActionMapper:
     def resolve_key(self, action: Action) -> str:
         """动作查找键：`kind:name`（有 name 时）否则 `kind`。
 
+        vrc 动作名先做别名归一化（friends_online/friends → list_friends，
+        BugFix：用户实测 LLM 爱这么写，不归一化会查不到映射被静默丢弃）。
+
         公开接口（F-03）：执行器需用同一套键给自动复位任务分槽，
         否则"同 kind 不同通道"（如左右手比耶）会互相取消复位任务。
         """
@@ -261,6 +282,8 @@ class ActionMapper:
             or action.params.get("gesture")
         )
         if name:
+            if action.kind == "vrc":
+                name = _normalize_vrc_name(str(name))
             return f"{action.kind}:{name}"
         return action.kind
 

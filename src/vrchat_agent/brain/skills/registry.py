@@ -317,5 +317,10 @@ class SkillRegistry:
 
     @staticmethod
     def _render_pack(pack: SkillPack) -> str:
-        """单个技能块的渲染格式。"""
-        return f"【技能：{pack.name}】\n{pack.description}"
+        """单个技能块的渲染格式。
+
+        标题用「技能块：」而非「技能：」——BugFix：LLM 会把注入的
+        「技能：vrc.social」误当成 actions.kind 的合法值（vrc.social 不是
+        ActionKind），导致 schema 拒绝整条决策。标题明确为"技能块"降低误用。
+        """
+        return f"【技能块：{pack.name}】\n{pack.description}"
