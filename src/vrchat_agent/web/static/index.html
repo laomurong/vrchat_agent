@@ -961,8 +961,9 @@ const FIELD_LABELS = {
   "vision.sensor": "画面采集", "vision.sampling": "采样设置",
   "agent.loop": "主循环", "agent.interrupt": "打断控制", "agent.degradation": "降级策略",
   // ---- asr ----
-  "asr.model_size": "模型大小", "asr.device": "计算设备", "asr.compute_type": "精度类型",
-  "asr.language": "识别语言", "asr.vad_mode": "语音检测灵敏度",
+  "asr.engine": "识别引擎", "asr.model_size": "模型大小", "asr.model_path": "模型路径",
+  "asr.device": "计算设备", "asr.compute_type": "精度类型",
+  "asr.language": "识别语言", "asr.decoding_method": "解码方式", "asr.vad_mode": "语音检测灵敏度",
   "asr.min_speech_ms": "最短语音毫秒", "asr.silence_ms": "静音判定毫秒", "asr.max_segment_s": "最长语音段秒",
   // ---- audio ----
   "audio.input.device": "输入设备", "audio.input.sample_rate": "采样率", "audio.input.chunk_ms": "音频块毫秒",
@@ -980,11 +981,16 @@ const FIELD_LABELS = {
   "brain.memory.max_items": "记忆条数上限", "brain.memory.inject_limit": "每次注入条数",
   "brain.memory.auto_extract": "自动提取", "brain.memory.extract_interval": "提取间隔（轮）",
   "brain.memory.extract_max_items": "每次提取最多条数",
+  "brain.memory.semantic": "语义检索", "brain.memory.semantic.enabled": "启用语义检索",
+  "brain.memory.semantic.model_name": "语义模型名", "brain.memory.semantic.model_dir": "语义模型目录",
+  "brain.memory.semantic.top_k": "语义检索条数", "brain.memory.semantic.device": "语义推理设备",
+  "brain.vision_mode": "视觉接入模式",
   // ---- speech ----
   "speech.tts.provider": "合成引擎", "speech.tts.api_key_env": "密钥环境变量", "speech.tts.api_key": "API 密钥",
   "speech.tts.voice": "音色（云端）", "speech.tts.edge_voice": "音色（Edge）",
   "speech.tts.rate": "语速", "speech.tts.volume": "音量", "speech.tts.timeout": "超时秒",
   "speech.tts.emotion_voice": "情感音色映射",
+  "speech.tts.tts_clone": "克隆语音（本地）",
   "speech.tts.tts_clone.base_url": "克隆服务地址", "speech.tts.tts_clone.method": "请求方式",
   "speech.tts.tts_clone.ref_audio_path": "克隆参考音频", "speech.tts.tts_clone.ref_text": "参考文本",
   "speech.tts.tts_clone.lang": "克隆语言", "speech.tts.tts_clone.timeout": "超时秒",
@@ -1008,6 +1014,10 @@ const FIELD_LABELS = {
   "agent.loop.think_timeout": "思考超时", "agent.loop.tts_timeout": "合成超时", "agent.loop.action_timeout": "动作超时",
   "agent.loop.latency_budget_s": "延迟预算秒", "agent.interrupt.enabled": "允许打断",
   "agent.degradation.message": "降级提示语", "agent.degradation.beep": "降级提示音",
+  "agent.chatbox_sync": "聊天框同步", "agent.startup_check": "启动自检",
+  "agent.utterance_queue": "对话队列", "agent.utterance_queue.enabled": "启用对话队列",
+  "agent.utterance_queue.max_batch": "最大批量条数",
+  "agent.idle_instinct": "空闲本能",
   // ---- dashboard ----
   "dashboard.enabled": "启用", "dashboard.terminal": "终端面板", "dashboard.refresh_ms": "刷新毫秒", "dashboard.obs_overlay": "OBS 叠加",
   // ---- emergency ----
@@ -1016,6 +1026,14 @@ const FIELD_LABELS = {
   "logging.level": "日志级别", "logging.file": "日志文件",
   // ---- web ----
   "web.enabled": "启用", "web.host": "监听地址", "web.port": "端口", "web.auto_open_browser": "自动打开浏览器",
+  // ---- vrcapi（VRChat API 集成）----
+  "vrcapi": "VRChat API", "vrcapi.enabled": "启用", "vrcapi.username_env": "用户名环境变量",
+  "vrcapi.password_env": "密码环境变量", "vrcapi.api_key_env": "密钥环境变量",
+  "vrcapi.rate_limit_seconds": "限流间隔（秒）",
+  // ---- nav（空间导航）----
+  "nav": "空间导航", "nav.enabled": "启用", "nav.db_path": "导航库路径",
+  "nav.fingerprint_size": "视觉指纹尺寸", "nav.similarity_threshold": "重定位相似度阈值",
+  "nav.explore_interval_s": "探索间隔（秒）", "nav.max_relocalize_attempts": "最大重定位尝试次数",
   // ---- 通用 key 兜底 ----
   enabled: "启用", device: "设备", sample_rate: "采样率", timeout: "超时秒",
   provider: "供应商", api_key: "API 密钥", api_key_env: "密钥环境变量",
@@ -1031,6 +1049,61 @@ const PROVIDER_LABELS = {
   "cosyvoice": "cosyvoice（CosyVoice · 阿里云克隆）",
   "openai": "openai", "ollama": "ollama（本地）", "vllm": "vllm（本地）",
 };
+
+// 枚举下拉选项「值 → 中文显示」映射（只改显示，不改内部值）。
+// 覆盖 schema.py SELECT_OPTIONS 的全部选项：提交/保存时 o.value 仍是英文内部值，
+// 仅 textContent 显示中文；无映射的选项（如自定义值）回退英文原值（向后兼容）。
+const OPTION_LABELS = {
+  // ---- asr.engine ----
+  "whisper": "Whisper（本地）", "dolphin": "Dolphin（本地）",
+  // ---- asr.model_size ----
+  "tiny": "tiny（最小）", "base": "base（基础）", "small": "small（小）", "medium": "medium（中）",
+  "large-v1": "large-v1（大）", "large-v2": "large-v2（大）", "large-v3": "large-v3（大）",
+  "large-v3-turbo": "large-v3-turbo（大·快）", "turbo": "turbo（快）",
+  "distil-small.en": "distil-small.en（蒸馏·英文·小）",
+  "distil-medium.en": "distil-medium.en（蒸馏·英文·中）",
+  "distil-large-v2": "distil-large-v2（蒸馏·英文·大）",
+  "distil-large-v3": "distil-large-v3（蒸馏·英文·大）",
+  // ---- asr.device ----
+  "cuda": "CUDA（GPU）", "cpu": "CPU",
+  // ---- asr.compute_type ----
+  "float16": "float16（半精度）", "float32": "float32（全精度）",
+  "int8": "int8（量化·快）", "int8_float16": "int8_float16（混合量化）", "int16": "int16（量化）",
+  // ---- asr.language ----
+  "auto": "自动检测", "zh": "中文", "en": "英语", "ja": "日语", "ko": "韩语",
+  "yue": "粤语", "fr": "法语", "de": "德语", "es": "西班牙语",
+  "ru": "俄语", "it": "意大利语", "pt": "葡萄牙语",
+  // ---- asr.decoding_method ----
+  "greedy_search": "贪心搜索（快）", "beam_search": "束搜索（更准）",
+  "modified_beam_search": "改进束搜索",
+  // ---- asr.vad_mode ----
+  "0": "0（关闭）", "1": "1（标准）", "2": "2（宽松）", "3": "3（激进）",
+  // ---- brain.llm.provider ----
+  "openai": "OpenAI（云端）", "ollama": "Ollama（本地）", "vllm": "vLLM（本地）",
+  // ---- brain.vision_mode ----
+  "reference_only": "仅参考（默认）", "keyword_filter": "关键词过滤",
+  // ---- speech.tts.provider ----
+  "cloud": "云端（OpenAI 兼容）", "edge": "Edge（本地免费）",
+  "clone": "克隆语音（本地模型）", "mimo": "MiMo 克隆（云）", "cosyvoice": "CosyVoice（阿里云）",
+  // ---- speech.tts.tts_clone.method ----
+  "get": "GET", "post": "POST",
+  // ---- speech.tts.tts_clone.lang ----
+  "zh": "中文", "en": "英语", "ja": "日语", "ko": "韩语",
+  // ---- vision.sensor.backend ----
+  "obs_websocket": "OBS WebSocket", "opencv": "OpenCV 摄像头", "window_capture": "窗口捕获",
+  // ---- logging.level ----
+  "DEBUG": "DEBUG（调试）", "INFO": "INFO（信息）", "WARNING": "WARNING（警告）",
+  "ERROR": "ERROR（错误）", "CRITICAL": "CRITICAL（致命）",
+};
+
+// 选项显示：先查 OPTION_LABELS（中文），再查 PROVIDER_LABELS（旧 provider 兼容），
+// 无映射回退英文原值（自定义输入/未收录值不破坏显示）。
+function optionLabel(path, value) {
+  const s = String(value);
+  if (OPTION_LABELS[s]) return OPTION_LABELS[s];
+  if (PROVIDER_LABELS[s]) return PROVIDER_LABELS[s];
+  return s;
+}
 
 const STATE_LABELS = {
   IDLE: "空闲", LISTENING: "聆听中", THINKING: "思考中",
@@ -1454,7 +1527,6 @@ function renderEnumSelect(path, options) {
   el.dataset.selectOptions = "1";
   const cur = getValue(path);
   const curStr = cur == null ? "" : String(cur);
-  const isProvider = /\.provider$/.test(path);
   const opts = Array.isArray(options) ? options.slice() : [];
   if (curStr !== "" && !opts.some((o) => String(o) === curStr)) {
     opts.push(curStr);
@@ -1463,7 +1535,7 @@ function renderEnumSelect(path, options) {
     const s = String(opt);
     const o = document.createElement("option");
     o.value = s;
-    o.textContent = (isProvider && PROVIDER_LABELS[s]) ? PROVIDER_LABELS[s] : s;
+    o.textContent = optionLabel(path, s);
     el.appendChild(o);
   }
   const custom = document.createElement("option");
@@ -1525,11 +1597,10 @@ function renderField(key, propSchema, path, container) {
     el.value = v == null ? "" : v;
   } else if (type === "string" && Array.isArray(propSchema.enum)) {
     el = document.createElement("select");
-    const isProvider = /\.provider$/.test(path);
     for (const opt of propSchema.enum) {
       const o = document.createElement("option");
       o.value = opt;
-      o.textContent = (isProvider && PROVIDER_LABELS[opt]) ? PROVIDER_LABELS[opt] : opt;
+      o.textContent = optionLabel(path, opt);
       el.appendChild(o);
     }
     el.value = getValue(path) ?? "";
