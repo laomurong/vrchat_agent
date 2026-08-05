@@ -440,6 +440,11 @@ class VRCApiConfig(BaseModel):
     - enabled：总开关（false 时动作映射 vrc:* 仍可解析，执行时报清晰错误）；
     - rate_limit_seconds：VRChat API 请求最小间隔（官方对单账号请求频率敏感，
       默认 60 秒/请求，全局串行节流）；
+    - two_factor_timeout_s：登录遇 2FA 时 Web 等待用户输入验证码的超时（秒，
+      默认 120）。.env VRC_2FA_CODE 非空时走环境变量兜底、不等待；
+    - auth_cache_path：会话（auth cookie）持久化文件路径（相对项目根，默认
+      data/vrchat_auth.json；data/ 已 gitignore）。登录成功原子写，重启后
+      ensure_authed 优先复用 cookie 免登录（一次验证长期复用）；空串禁用；
     - allow_destructive：call_api 写操作总开关（默认 false）——为 true 时
       非白名单写操作放行（危险操作 closed 仍拒绝）；社交白名单写操作
       （friend/accept_friend_request/invite_user 等）默认开放 + 审计日志。
@@ -450,6 +455,8 @@ class VRCApiConfig(BaseModel):
     password_env: str = "VRC_PASSWORD"
     api_key_env: str = "VRC_API_KEY"
     rate_limit_seconds: float = 60.0
+    two_factor_timeout_s: float = 120.0
+    auth_cache_path: str = "data/vrchat_auth.json"
     allow_destructive: bool = False
 
 

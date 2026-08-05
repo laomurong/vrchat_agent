@@ -246,7 +246,7 @@ async def build_and_run(config: Config) -> None:
     setup_logging(config.logging.level, config.logging.file)
     logger = get_logger("vrchat_agent")
 
-    from .events import EventBus
+    from .events import Event, EventBus
 
     bus = EventBus()
     loop = asyncio.get_running_loop()
@@ -404,24 +404,45 @@ async def build_and_run(config: Config) -> None:
     )
     # 任务①：VRChat API 执行器（懒加载——构造不登录，首次 vrc 动作才登录；
     # vrcapi 未启用/未配置时保持 None，vrc 动作执行时报清晰错误）
+    vrc_client = None
     vrc_executor = None
+    two_factor = None  # P2-1：2FA 验证码服务（vrcapi 启用时创建，WebServer 复用）
     try:
         if config.vrcapi.enabled:
             from .vrcapi.actions import VRCActionExecutor
             from .vrcapi.client import VRCAPIClient
+            from .vrcapi.two_factor import TwoFactorCodeService
 
+            # P2-1：2FA 验证码服务——登录遇 2FA 时先推「需要验证码」状态到
+            # Web（SSE vrc_2fa_status），再阻塞等待用户提交；.env VRC_2FA_CODE
+            # 非空时直接兜底。状态经 EventBus 线程安全发布（登录在 executor 线程）。
+            two_factor = TwoFactorCodeService(
+                timeout_s=float(getattr(config.vrcapi, "two_factor_timeout_s", 120.0) or 120.0),
+                status_callback=lambda payload: bus.publish_threadsafe(
+                    Event("vrc_2fa_status", payload)
+                ),
+            )
+            # P2-2：会话持久化路径（相对项目根解析；空串禁用）
+            auth_cache = (getattr(config.vrcapi, "auth_cache_path", "") or "").strip()
+            auth_cache_path = None
+            if auth_cache:
+                auth_cache_path = Path(auth_cache)
+                if not auth_cache_path.is_absolute():
+                    auth_cache_path = PROJECT_ROOT / auth_cache_path
             vrc_client = VRCAPIClient(
                 username_env=config.vrcapi.username_env,
                 password_env=config.vrcapi.password_env,
                 api_key_env=config.vrcapi.api_key_env,
                 rate_limit_seconds=config.vrcapi.rate_limit_seconds,
+                two_factor_code_provider=two_factor.provide,
+                auth_cache_path=auth_cache_path,
             )
             # T03：call_api 写操作总开关（默认 false；危险操作 closed 仍拒绝）
             vrc_executor = VRCActionExecutor(
                 vrc_client,
                 allow_destructive=bool(getattr(config.vrcapi, "allow_destructive", False)),
             )
-            logger.info("VRChat API 执行器已就绪（vrc 动作可用，懒加载登录）")
+            logger.info("VRChat API 执行器已就绪（vrc 动作可用，懒加载登录；2FA Web 交互 + 会话持久化已接线）")
     except Exception as exc:  # noqa: BLE001 - 初始化失败仅降级（vrc 动作不可用），不阻断启动
         logger.warning("VRChat API 执行器初始化失败（vrc 动作将不可用）: %s", exc)
     try:
@@ -471,7 +492,9 @@ async def build_and_run(config: Config) -> None:
 
         web_server = WebServer(bus, config, usage, PROJECT_ROOT, dashboard=dashboard,
                                control=agent_loop, memory=memory_store,
-                               voice_clone=voice_clone_manager)
+                               voice_clone=voice_clone_manager,
+                               two_factor=two_factor,
+                               vrc_client=vrc_client)
 
     # ------------------------------------------------------------------
     # 启动

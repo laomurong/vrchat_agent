@@ -610,6 +610,42 @@
             </div>
             <div id="ctrl-feedback" style="font-size:12.5px;min-height:16px"></div>
           </div>
+
+          <!-- P2-1：VRChat API 2FA 验证码输入（登录遇两步验证时显示） -->
+          <div class="panel" id="vrc2fa-panel" style="display:none">
+            <h3>🔐 VRChat 两步验证</h3>
+            <div style="font-size:var(--fs-body);color:var(--warn);margin-bottom:var(--s2)">
+              VRChat API 需要两步验证（2FA），请输入验证码继续登录
+              <span id="vrc2fa-methods" style="color:var(--muted)"></span>
+            </div>
+            <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+              <input id="vrc2fa-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                     placeholder="输入 6 位验证码（TOTP 验证器 / 邮箱验证码）"
+                     style="flex:1;min-width:220px;padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--bg-input);color:var(--text)" />
+              <button id="vrc2fa-submit" class="btn primary">提交验证码</button>
+            </div>
+            <div style="font-size:var(--fs-sm);color:var(--muted);margin-top:var(--s2)">
+              <span id="vrc2fa-remaining"></span>
+              <span id="vrc2fa-env-hint"></span>
+            </div>
+            <div id="vrc2fa-status" style="font-size:12.5px;min-height:16px;margin-top:var(--s2)"></div>
+          </div>
+
+          <!-- P2-2：VRChat API 一次性登录（会话持久化，一次验证长期复用） -->
+          <div class="panel" id="vrclogin-panel">
+            <h3>🛰 VRChat API 登录</h3>
+            <div style="display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap">
+              <span id="vrclogin-status" class="tag restart">未登录</span>
+              <span id="vrclogin-display" style="color:var(--muted);font-size:var(--fs-sm);flex:1;min-width:160px"></span>
+              <button id="vrclogin-btn" class="btn primary" title="登录一次后会话持久化，重启免重复验证">登录</button>
+              <button id="vrclogin-logout" class="btn" style="display:none" title="登出并清除持久化会话">登出</button>
+            </div>
+            <div style="font-size:var(--fs-sm);color:var(--muted);margin-top:var(--s2)">
+              登录遇两步验证时会在上方出现验证码输入框；登录成功后会话（auth cookie）持久化，
+              之后 vrc 动作直接复用已登录状态，无需每次触发时临时登录。
+            </div>
+            <div id="vrclogin-msg" style="font-size:12.5px;min-height:16px;margin-top:var(--s2)"></div>
+          </div>
         </div>
 
         <!-- 右列：流水线 + 时间线 + 用量 -->
@@ -1029,7 +1065,8 @@ const FIELD_LABELS = {
   // ---- vrcapi（VRChat API 集成）----
   "vrcapi": "VRChat API", "vrcapi.enabled": "启用", "vrcapi.username_env": "用户名环境变量",
   "vrcapi.password_env": "密码环境变量", "vrcapi.api_key_env": "密钥环境变量",
-  "vrcapi.rate_limit_seconds": "限流间隔（秒）",
+  "vrcapi.rate_limit_seconds": "限流间隔（秒）", "vrcapi.two_factor_timeout_s": "2FA 等待超时（秒）",
+  "vrcapi.auth_cache_path": "会话缓存路径",
   // ---- nav（空间导航）----
   "nav": "空间导航", "nav.enabled": "启用", "nav.db_path": "导航库路径",
   "nav.fingerprint_size": "视觉指纹尺寸", "nav.similarity_threshold": "重定位相似度阈值",
@@ -1113,7 +1150,7 @@ const STATE_LABELS = {
 const EVENT_LABELS = {
   state_changed: "状态变化", utterance_ready: "语音识别", decision_ready: "决策完成",
   action_executed: "动作执行", tts_started: "TTS 开始", tts_finished: "TTS 结束",
-  emergency_stop: "紧急停止", pipeline_state: "流水线状态",
+  emergency_stop: "紧急停止", pipeline_state: "流水线状态", vrc_2fa_status: "2FA 状态",
 };
 
 const PHASE_LABELS = {
@@ -1213,6 +1250,7 @@ function applySnapshot(snap) {
   const u = snap.usage || {};
   stateEls.usage.innerHTML = `LLM 调用 <b>${u.llm_calls || 0}</b> 次 · TTS 调用 <b>${u.tts_calls || 0}</b> 次 · 预估成本 ≈ <b>¥${(u.cost || 0).toFixed(4)}</b>`;
   renderTimeline(snap.timeline);
+  render2FA(snap.vrc_2fa);
 }
 
 function onLiveEvent(evt) {
@@ -1236,6 +1274,9 @@ function onLiveEvent(evt) {
   } else if (evt.type === "pipeline_state") {
     renderPipelineData(p);
     return;
+  } else if (evt.type === "vrc_2fa_status") {
+    render2FA(p);
+    return;
   }
   const box = stateEls.timeline;
   if (box.firstChild && box.firstChild.textContent === "等待事件…") box.innerHTML = "";
@@ -1253,10 +1294,219 @@ function connectSSE() {
   es.onopen = () => { $("conn").textContent = "● 已连接"; $("conn").className = "conn on"; };
   es.onerror = () => { $("conn").textContent = "● 连接中断，重连中…"; $("conn").className = "conn off"; };
   es.addEventListener("snapshot", (e) => { try { applySnapshot(JSON.parse(e.data)); } catch (err) { console.error(err); } });
-  for (const t of ["state_changed", "utterance_ready", "decision_ready", "action_executed", "tts_started", "tts_finished", "emergency_stop", "pipeline_state"]) {
+  for (const t of ["state_changed", "utterance_ready", "decision_ready", "action_executed", "tts_started", "tts_finished", "emergency_stop", "pipeline_state", "vrc_2fa_status"]) {
     es.addEventListener(t, (e) => { try { onLiveEvent({ type: t, data: JSON.parse(e.data) }); } catch (err) { console.error(err); } });
   }
   return es;
+}
+
+// ===========================================================================
+// VRChat API 2FA 验证码（P2-1）：SSE 状态 → 输入框 → POST /api/vrc/2fa
+// 登录遇 2FA 时 TwoFactorCodeService 把 waiting=true 状态推过来（SSE 事件 +
+// /api/status 快照 vrc_2fa 字段）；页面显示输入框，用户提交后回调被唤醒，
+// 登录继续。另每 2s 轮询 GET /api/vrc/2fa/status 兜底（SSE 断线/刷新回显）。
+// ===========================================================================
+let VRC2FA_LAST = { waiting: false };
+let VRC2FA_TICK = null;        // 剩余秒倒计时定时器
+let VRC2FA_TICK_START = 0;     // 倒计时起点（与服务端 wait_remaining_s 对齐）
+
+function vrc2faFeedback(msg, cls) {
+  const fb = $("vrc2fa-status");
+  if (!fb) return;
+  fb.textContent = msg || "";
+  fb.className = cls || "";
+  if (cls && msg) setTimeout(() => { if (fb.textContent === msg) fb.textContent = ""; }, 5000);
+}
+
+function render2FA(state) {
+  const panel = $("vrc2fa-panel");
+  if (!panel) return;
+  const s = (state && typeof state === "object") ? state : {};
+  const waiting = !!s.waiting;
+  VRC2FA_LAST = { waiting, methods: s.methods || [], remaining: s.wait_remaining_s || 0 };
+
+  if (!waiting) {
+    panel.style.display = "none";
+    if (VRC2FA_TICK) { clearInterval(VRC2FA_TICK); VRC2FA_TICK = null; }
+    $("vrc2fa-remaining").textContent = "";
+    return;
+  }
+  panel.style.display = "";
+
+  const methods = (s.methods && s.methods.length) ? s.methods.join(" / ") : "totp / emailOtp";
+  $("vrc2fa-methods").textContent = "（可用方式：" + methods + "）";
+  $("vrc2fa-env-hint").textContent = s.code_env_configured
+    ? " · 检测到 VRC_2FA_CODE 环境变量：优先走 .env 兜底，无需在此输入"
+    : "";
+  // 剩余秒显示（wait_remaining_s 由服务端实时计算，SSE/轮询每次刷新重置基准）
+  const remain = Math.max(0, Math.round(s.wait_remaining_s || 0));
+  $("vrc2fa-remaining").textContent = "等待验证码，剩余 " + remain + "s（超时后登录失败，可在 .env 配置 VRC_2FA_CODE 兜底）";
+
+  // 倒计时平滑刷新（不依赖 SSE 高频推送；每次 render 重置基准避免漂移）
+  VRC2FA_TICK_START = Date.now();
+  if (!VRC2FA_TICK) {
+    VRC2FA_TICK = setInterval(() => {
+      if (!VRC2FA_LAST.waiting) { clearInterval(VRC2FA_TICK); VRC2FA_TICK = null; return; }
+      const r = Math.max(0, Math.round(VRC2FA_LAST.remaining - (Date.now() - VRC2FA_TICK_START) / 1000));
+      $("vrc2fa-remaining").textContent = "等待验证码，剩余 " + r + "s（超时后登录失败，可在 .env 配置 VRC_2FA_CODE 兜底）";
+      if (r <= 0) { clearInterval(VRC2FA_TICK); VRC2FA_TICK = null; }
+    }, 1000);
+  }
+}
+
+async function refresh2FA() {
+  try {
+    const resp = await fetch("/api/vrc/2fa/status");
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data && typeof data === "object") render2FA(data);
+  } catch (e) {
+    // 未接线/未启动：保留面板状态，不打扰
+  }
+}
+
+async function submit2FA() {
+  const input = $("vrc2fa-code");
+  const code = (input.value || "").trim();
+  if (!code) { vrc2faFeedback("❌ 请输入验证码", "err"); input.focus(); return; }
+  const btn = $("vrc2fa-submit");
+  btn.disabled = true;
+  vrc2faFeedback("⏳ 提交中…", "");
+  try {
+    const resp = await fetch("/api/vrc/2fa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      vrc2faFeedback("❌ " + (data.detail || data.error || "提交失败"), "err");
+      return;
+    }
+    vrc2faFeedback("✅ 验证码已提交，登录继续…", "ok");
+    input.value = "";
+    refresh2FA();
+  } catch (e) {
+    vrc2faFeedback("❌ 网络错误：" + e.message, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function bind2FA() {
+  $("vrc2fa-submit").addEventListener("click", submit2FA);
+  $("vrc2fa-code").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit2FA(); }
+  });
+  // 轮询兜底（SSE 断线/页面刷新回显）；2s 与控制状态轮询一致
+  setInterval(refresh2FA, 2000);
+}
+
+// ===========================================================================
+// VRChat API 一次性登录（P2-2）：POST /api/vrc/login + GET /api/vrc/status
+// 状态流转：未登录 → 登录中（遇 2FA 显示验证码面板）→ 已登录（displayName）。
+// 登录成功会持久化 auth cookie，重启后 vrc 动作直接复用，无需重复验证。
+// 2s 轮询 /api/vrc/status 刷新（与 refresh2FA 共用节奏，SSE 断线也兜底）。
+// ===========================================================================
+function vrcLoginFeedback(msg, cls) {
+  const fb = $("vrclogin-msg");
+  if (!fb) return;
+  fb.textContent = msg || "";
+  fb.className = cls || "";
+  if (cls && msg) setTimeout(() => { if (fb.textContent === msg) fb.textContent = ""; }, 6000);
+}
+
+function renderVRCLogin(st) {
+  const chip = $("vrclogin-status");
+  const display = $("vrclogin-display");
+  const btn = $("vrclogin-btn");
+  const logoutBtn = $("vrclogin-logout");
+  if (!chip) return;
+  const s = (st && typeof st === "object") ? st : {};
+  if (s.authed) {
+    chip.textContent = "● 已登录";
+    chip.className = "tag hot";
+    display.textContent = s.display_name ? "当前账号：" + s.display_name + "（会话已持久化，重启免登录）" : "";
+    btn.style.display = "none";
+    logoutBtn.style.display = "";
+  } else if (s.pending_2fa) {
+    chip.textContent = "● 需要验证码";
+    chip.className = "tag restart";
+    display.textContent = "请在「🔐 VRChat 两步验证」输入框提交验证码";
+    btn.style.display = "none";
+    logoutBtn.style.display = "none";
+  } else if (s.login_in_progress) {
+    chip.textContent = "● 登录中…";
+    chip.className = "tag restart";
+    display.textContent = "正在登录 VRChat API…";
+    btn.style.display = "none";
+    logoutBtn.style.display = "none";
+  } else {
+    chip.textContent = "● 未登录";
+    chip.className = "tag restart";
+    display.textContent = s.login_error
+      ? "上次登录失败：" + s.login_error
+      : "登录一次后会话持久化，重启免重复验证";
+    btn.style.display = "";
+    logoutBtn.style.display = "none";
+  }
+}
+
+async function refreshVRCLogin() {
+  try {
+    const resp = await fetch("/api/vrc/status");
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data && typeof data === "object") renderVRCLogin(data);
+  } catch (e) {
+    // 未接线/未启动：保留面板状态，不打扰
+  }
+}
+
+async function vrcLogin() {
+  vrcLoginFeedback("⏳ 正在触发登录…（若账号开启两步验证，会出现验证码输入框）", "");
+  try {
+    const resp = await fetch("/api/vrc/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      vrcLoginFeedback("❌ " + (data.detail || data.error || "登录失败"), "err");
+      return;
+    }
+    setTimeout(refreshVRCLogin, 200);
+  } catch (e) {
+    vrcLoginFeedback("❌ 网络错误：" + e.message, "err");
+  }
+}
+
+async function vrcLogout() {
+  if (!confirm("确定要登出 VRChat API 吗？将清除持久化会话，下次需要重新登录。")) return;
+  try {
+    const resp = await fetch("/api/vrc/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.ok !== true) {
+      vrcLoginFeedback("❌ " + (data.detail || data.error || "登出失败"), "err");
+      return;
+    }
+    vrcLoginFeedback("✅ 已登出 VRChat API（持久化会话已清除）", "ok");
+    setTimeout(refreshVRCLogin, 200);
+  } catch (e) {
+    vrcLoginFeedback("❌ 网络错误：" + e.message, "err");
+  }
+}
+
+function bindVRCLogin() {
+  $("vrclogin-btn").addEventListener("click", vrcLogin);
+  $("vrclogin-logout").addEventListener("click", vrcLogout);
+  // 轮询登录状态（2s，与 refresh2FA/refreshControl 同节奏）
+  setInterval(refreshVRCLogin, 2000);
 }
 
 // ===========================================================================
@@ -2137,6 +2387,8 @@ $("mem-auto-extract").addEventListener("change", saveMemoryToggle);
 $("nav-memory").addEventListener("click", loadMemories);
 $("voice-clone-btn").addEventListener("click", cloneVoice);
 bindControlButtons();
+bind2FA();
+bindVRCLogin();
 
 // 记忆搜索 & 过滤
 const memSearchEl = $("mem-search");

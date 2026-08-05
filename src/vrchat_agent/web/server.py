@@ -198,6 +198,8 @@ def create_app(
     shutdown_delay_s: float = 0.3,
     memory=None,
     voice_clone=None,
+    two_factor=None,
+    vrc_client=None,
 ) -> FastAPI:
     """构建 FastAPI 应用（依赖经 app.state 注入；SSE 心跳间隔可注入便于测试）。
 
@@ -207,6 +209,10 @@ def create_app(
     503/空列表（未接线），不影响其它端点。
     voice_clone：VoiceCloneManager（DashScope CosyVoice 音色克隆）。为 None 时
     音色克隆端点返回 503/空列表（未接线），不影响其它端点。
+    two_factor：TwoFactorCodeService（VRChat API 2FA 验证码服务，P2-1）。为
+    None 时 2FA 端点返回 503（vrcapi 未启用/未接线），不影响其它端点。
+    vrc_client：VRCAPIClient（VRChat API 客户端，P2-2 Web 一次性登录）。为
+    None 时 /api/vrc/login|status|logout 返回 503（vrcapi 未启用/未接线）。
     shutdown_delay_s：/api/control/shutdown 先返回响应、再延迟停止主循环的秒数
     （保证 HTTP 响应能先 flush 出去，进程再优雅退出；测试可注入 0）。
     """
@@ -226,6 +232,11 @@ def create_app(
     app.state.shutdown_delay_s = shutdown_delay_s
     app.state.memory = memory
     app.state.voice_clone = voice_clone
+    app.state.two_factor = two_factor
+    app.state.vrc_client = vrc_client
+    # P2-2：Web 登录后台任务与最近错误（防重入 + 状态查询）
+    app.state.vrc_login_task = None
+    app.state.vrc_login_error = None
 
     # ------------------------------------------------------------------
     # GET / —— 单页 UI（index.html）
@@ -572,6 +583,168 @@ def create_app(
             return _error(500, "internal_error", "关闭失败")
 
     # ------------------------------------------------------------------
+    # VRChat API 2FA 验证码（P2-1）：状态查询 + 验证码提交
+    # 未注入 TwoFactorCodeService 时（vrcapi 未启用/未接线）返回 503。
+    # 登录跑在 executor 线程；TwoFactorCodeService.submit 用 threading.Event
+    # 跨线程唤醒等待中的 two_factor_code_provider 回调，登录继续。
+    # ------------------------------------------------------------------
+    def _two_factor() -> Any:
+        tf = app.state.two_factor
+        if tf is None:
+            raise LookupError("two_factor 未接线（TwoFactorCodeService 未注入 WebServer）")
+        return tf
+
+    def _no_two_factor() -> JSONResponse:
+        return _error(503, "two_factor_unavailable", "VRChat API 2FA 服务未接线（vrcapi 未启用）")
+
+    @app.get("/api/vrc/2fa/status")
+    async def api_vrc_2fa_status() -> JSONResponse:
+        """当前是否等待 2FA + 可用方式（前端轮询 / 页面刷新回显）。"""
+        try:
+            tf = _two_factor()
+        except LookupError:
+            return _no_two_factor()
+        try:
+            return JSONResponse(content={"ok": True, **tf.status()})
+        except Exception:
+            logger.exception("GET /api/vrc/2fa/status 异常", extra={"event": "web_error"})
+            return _error(500, "internal_error", "2FA 状态获取失败")
+
+    @app.post("/api/vrc/2fa")
+    async def api_vrc_2fa_submit(request: Request) -> JSONResponse:
+        """提交 2FA 验证码 {code: "123456"} → 通知等待中的回调；无等待返回 409。"""
+        try:
+            tf = _two_factor()
+        except LookupError:
+            return _no_two_factor()
+        try:
+            body = await request.json()
+        except Exception:
+            return _error(400, "bad_request", "请求体必须是 JSON")
+        if not isinstance(body, dict):
+            return _error(400, "bad_request", "请求体必须是 JSON 对象")
+        code = str(body.get("code", "")).strip()
+        if not code:
+            return _error(400, "validation_error", "缺少验证码（body.code）")
+        try:
+            accepted = tf.submit(code)
+        except ValueError as exc:
+            return _error(400, "validation_error", str(exc))
+        except Exception:
+            logger.exception("POST /api/vrc/2fa 异常", extra={"event": "web_error"})
+            return _error(500, "internal_error", "验证码提交失败")
+        if not accepted:
+            return _error(
+                409,
+                "no_waiting_2fa",
+                "当前没有等待中的 2FA 验证码请求（可能已超时或已提交）",
+            )
+        return JSONResponse(
+            content={"ok": True, "accepted": True, "message": "验证码已提交，登录继续"}
+        )
+
+    # ------------------------------------------------------------------
+    # VRChat API 一次性登录（P2-2）：POST /api/vrc/login + GET /api/vrc/status
+    # + POST /api/vrc/logout。登录在后台 task 跑（ensure_authed 内部 to_thread，
+    # 不阻塞 Web）；遇 2FA 时 two_factor.waiting=True → 前端显示验证码输入框 →
+    # POST /api/vrc/2fa 提交 → 登录继续 → 会话持久化（重启免登录复用）。
+    # 防重入：已有登录任务未完成时再次 POST 返回 pending（幂等）。
+    # ------------------------------------------------------------------
+    def _vrc_client() -> Any:
+        c = app.state.vrc_client
+        if c is None:
+            raise LookupError("vrc_client 未接线（VRChat API 客户端未注入 WebServer）")
+        return c
+
+    def _no_vrc() -> JSONResponse:
+        return _error(503, "vrcapi_unavailable", "VRChat API 未启用（vrcapi.enabled=false 或未接线）")
+
+    def _vrc_display_name(client: Any) -> str:
+        if not client.is_authed:
+            return ""
+        try:
+            return client.display_name
+        except Exception:
+            return ""
+
+    @app.post("/api/vrc/login")
+    async def api_vrc_login() -> JSONResponse:
+        """触发 VRChat API 登录（后台执行）：已登录幂等返回；未完成防重入返回 pending。"""
+        try:
+            client = _vrc_client()
+        except LookupError:
+            return _no_vrc()
+        tf = app.state.two_factor
+        if client.is_authed:
+            return JSONResponse(
+                content={"ok": True, "status": "authed", "display_name": _vrc_display_name(client)}
+            )
+        task = app.state.vrc_login_task
+        if task is not None and not task.done():
+            # 防重入：已有登录流程在跑（含 2FA 等待）
+            return JSONResponse(
+                content={"ok": True, "status": "pending", "pending_2fa": bool(tf and tf.waiting)}
+            )
+        if tf is not None and tf.waiting:
+            # 用户已停在验证码页（等待未结束）
+            return JSONResponse(
+                content={"ok": True, "status": "waiting_2fa", "pending_2fa": True}
+            )
+        app.state.vrc_login_error = None
+
+        async def _run_login() -> None:
+            try:
+                await client.ensure_authed()
+                app.state.vrc_login_error = None
+            except Exception as exc:  # noqa: BLE001 - 登录失败记录供状态查询
+                app.state.vrc_login_error = str(exc)
+                logger.warning("Web 触发 VRChat 登录失败: %s", exc, extra={"event": "vrc_login_failed"})
+
+        app.state.vrc_login_task = asyncio.create_task(_run_login(), name="vrc_login")
+        return JSONResponse(content={"ok": True, "status": "pending", "pending_2fa": False})
+
+    @app.get("/api/vrc/status")
+    async def api_vrc_status() -> JSONResponse:
+        """VRChat API 登录状态（authed/display_name/pending_2fa/methods/login_error）。"""
+        try:
+            client = _vrc_client()
+        except LookupError:
+            return _no_vrc()
+        tf = app.state.two_factor
+        task = app.state.vrc_login_task
+        pending_2fa = bool(tf and tf.waiting)
+        task_running = bool(task is not None and not task.done())
+        return JSONResponse(
+            content={
+                "ok": True,
+                "authed": client.is_authed,
+                "display_name": _vrc_display_name(client),
+                "login_in_progress": task_running or pending_2fa,
+                "pending_2fa": pending_2fa,
+                "methods": list(tf.status()["methods"]) if tf else [],
+                "login_error": app.state.vrc_login_error,
+            }
+        )
+
+    @app.post("/api/vrc/logout")
+    async def api_vrc_logout() -> JSONResponse:
+        """登出 VRChat API：调用 SDK logout + 清内存 + 删持久化 cookie。"""
+        try:
+            client = _vrc_client()
+        except LookupError:
+            return _no_vrc()
+        task = app.state.vrc_login_task
+        if task is not None and not task.done():
+            return _error(409, "login_in_progress", "登录进行中，无法登出（请先等待完成或输入验证码）")
+        try:
+            await client.logout()
+        except Exception:
+            logger.exception("POST /api/vrc/logout 异常", extra={"event": "web_error"})
+            return _error(500, "internal_error", "登出失败")
+        app.state.vrc_login_error = None
+        return JSONResponse(content={"ok": True, "message": "已登出 VRChat API（会话已清除）"})
+
+    # ------------------------------------------------------------------
     # 长期记忆（标准版）：GET/POST/PUT/DELETE /api/memory
     # 无 MemoryStore 注入（未接线）时：GET 返回空列表 + disabled；写操作 503。
     # 鉴权同现状：host 默认 127.0.0.1 本机访问无鉴权。
@@ -802,6 +975,8 @@ class WebServer:
         shutdown_delay_s: float = 0.3,
         memory=None,
         voice_clone=None,
+        two_factor=None,
+        vrc_client=None,
     ) -> None:
         self._bus = bus
         self._config = config
@@ -813,6 +988,8 @@ class WebServer:
         self._shutdown_delay_s = shutdown_delay_s
         self._memory = memory
         self._voice_clone = voice_clone
+        self._two_factor = two_factor
+        self._vrc_client = vrc_client
         self._app = create_app(
             bus,
             config,
@@ -824,6 +1001,8 @@ class WebServer:
             shutdown_delay_s=shutdown_delay_s,
             memory=memory,
             voice_clone=voice_clone,
+            two_factor=two_factor,
+            vrc_client=vrc_client,
         )
         self.port: int = 0
         self._server: _EmbeddedServer | None = None
@@ -887,10 +1066,20 @@ class WebServer:
         await server.serve(sockets=[sock])
 
     def shutdown(self) -> None:
-        """请求优雅关闭 uvicorn server（由 main finally 调用）。"""
+        """请求优雅关闭 uvicorn server（由 main finally 调用）。
+
+        P2-1：若用户正等待 2FA 验证码，取消挂起等待（登录线程立即返回
+        清晰错误，避免进程退出后 executor 线程空等 120s）。
+        """
         server = self._server
         if server is not None:
             server.should_exit = True
+        tf = self._two_factor
+        if tf is not None:
+            try:
+                tf.cancel("Web 控制台已关闭，2FA 验证码等待被取消")
+            except Exception:  # noqa: BLE001 - 关闭路径异常静默
+                logger.debug("取消 2FA 等待失败（忽略）", exc_info=True)
 
     def _open_browser(self, url: str) -> None:
         """自动打开默认浏览器（失败仅记录，不阻断启动）。"""

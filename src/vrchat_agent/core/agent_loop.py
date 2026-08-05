@@ -1139,7 +1139,6 @@ class AgentLoop:
             return
         if self._emergency_stopped:
             return
-        timeout = self._timeout("agent.loop.action_timeout", 5.0)
         for action in sorted(actions, key=lambda a: a.priority, reverse=True):
             if self._emergency_stopped:
                 logger.warning("急停：跳过剩余动作", extra={"event": "emergency_stop"})
@@ -1162,6 +1161,13 @@ class AgentLoop:
                         continue
                 logger.warning("nav 动作被忽略：空间导航未启用", extra={"event": "action_failed"})
                 continue
+            # P2-2：vrc 动作首次执行可能触发懒加载登录 + 2FA 等待（最长
+            # two_factor_timeout_s，默认 120s）。5s 动作超时会把登录线程杀掉
+            # （用户实测日志"动作执行失败 vrc: "空信息 = TimeoutError str 为空）。
+            # 对 vrc 动作放宽超时覆盖 2FA 等待；会话持久化后 vrc 动作秒回。
+            timeout = self._timeout("agent.loop.action_timeout", 5.0)
+            if action.kind == "vrc":
+                timeout = max(timeout, self._vrc_action_timeout())
             try:
                 await asyncio.wait_for(self._actuator.execute(action), timeout=timeout)
                 self._bus.publish(
@@ -1172,6 +1178,20 @@ class AgentLoop:
                 )
             except Exception as exc:
                 logger.error("动作执行失败 %s: %s", action.kind, exc, extra={"event": "action_failed"})
+
+    def _vrc_action_timeout(self) -> float:
+        """vrc 动作专用超时：agent.loop.action_timeout 与 2FA 等待时长 +10s 取大。
+
+        保证 Web 登录遇 2FA（等待 two_factor_timeout_s）时动作不被 5s 超时杀掉；
+        登录成功后 vrc 动作走持久化会话秒回，不产生额外等待。
+        """
+        try:
+            two_factor_timeout = float(
+                getattr(self._config.vrcapi, "two_factor_timeout_s", 120.0) or 120.0
+            )
+        except Exception:
+            two_factor_timeout = 120.0
+        return max(5.0, two_factor_timeout + 10.0)
 
     # ------------------------------------------------------------------
     # 任务 2：回复时自动同步 VRChat 聊天框（chatbox:reply）

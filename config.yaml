@@ -196,6 +196,12 @@ vrcapi:
   password_env: VRC_PASSWORD
   api_key_env: VRC_API_KEY
   rate_limit_seconds: 60.0
+  # 登录遇 2FA 时 Web 等待用户输入验证码的超时（秒）；.env VRC_2FA_CODE
+  # 非空时走环境变量兜底（不等待），适合邮箱一次性验证码。
+  two_factor_timeout_s: 120.0
+  # 会话（auth cookie）持久化：登录成功原子写该文件，重启后 ensure_authed
+  # 优先复用 cookie 免登录（Web 一次验证长期复用）；data/ 已 gitignore。
+  auth_cache_path: data/vrchat_auth.json
   # call_api 写操作总开关（默认 false）：为 true 时非白名单写操作放行
   # （危险操作 closed 仍拒绝）；社交白名单写操作默认开放 + 审计日志。
   allow_destructive: false

@@ -18,7 +18,7 @@ from ..events import Event, EventBus, EventType
 
 logger = logging.getLogger("vrchat_agent.web.status")
 
-# SSE 转发的事件类型（均为既有事件，不新增类型）
+# SSE 转发的事件类型（均为既有事件 + P2-1 vrc_2fa_status，不新增类型以外的通道）
 FORWARDED_TYPES = [
     EventType.STATE_CHANGED.value,
     EventType.UTTERANCE_READY.value,
@@ -28,6 +28,7 @@ FORWARDED_TYPES = [
     EventType.TTS_FINISHED.value,
     EventType.EMERGENCY_STOP.value,
     EventType.PIPELINE_STATE.value,
+    "vrc_2fa_status",
 ]
 
 _DEFAULT_TIMELINE_MAX = 200
@@ -63,6 +64,16 @@ class WebStatusStore:
             "actions": [],
             "latency_s": 0.0,
             "last_update": time.time(),
+            # P2-1：VRChat API 2FA 等待状态（vrc_2fa_status 事件驱动；未发生时为默认空态）
+            "vrc_2fa": {
+                "waiting": False,
+                "methods": [],
+                "timeout_s": 120.0,
+                "wait_elapsed_s": 0.0,
+                "wait_remaining_s": 0.0,
+                "code_env_configured": False,
+                "submitted": False,
+            },
         }
         self._timeline: deque[dict[str, Any]] = deque(maxlen=max_timeline)
         self._queues: list[asyncio.Queue[Event]] = []
@@ -120,6 +131,9 @@ class WebStatusStore:
             kind = payload.get("kind", "")
             self._snapshot["actions"].append(f"{kind}:{name}" if kind else str(name))
             self._snapshot["actions"] = self._snapshot["actions"][-_ACTION_KEEP:]
+        elif event.type == "vrc_2fa_status":
+            # P2-1：2FA 等待状态直接覆盖快照字段（waiting/methods/超时/是否已提交）
+            self._snapshot["vrc_2fa"] = dict(payload or {})
 
     # ---- 快照 ----
     def snapshot(self) -> dict[str, Any]:
