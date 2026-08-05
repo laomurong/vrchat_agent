@@ -610,7 +610,10 @@ class AgentLoop:
                 timeout = self._timeout("agent.loop.think_timeout", 20.0)
                 try:
                     decision = await asyncio.wait_for(
-                        self._brain.decide(utt.text, vision_b64), timeout=timeout
+                        self._brain.decide(
+                            utt.text, vision_b64, forced_skills=self._nav_forced_skills()
+                        ),
+                        timeout=timeout,
                     )
                 except asyncio.TimeoutError:
                     logger.error("LLM 决策超时 (%.1fs)", timeout, extra={"event": "llm_timeout"})
@@ -981,7 +984,10 @@ class AgentLoop:
 
         timeout = self._timeout("agent.loop.think_timeout", 20.0)
         try:
-            decision = await asyncio.wait_for(self._brain.decide(text, vision_b64), timeout=timeout)
+            decision = await asyncio.wait_for(
+                self._brain.decide(text, vision_b64, forced_skills=self._nav_forced_skills()),
+                timeout=timeout,
+            )
         except asyncio.TimeoutError:
             logger.error("LLM 决策超时 (%.1fs)", timeout, extra={"event": "llm_timeout"})
             decision = Decision(respond=False, reply_text=None, actions=[])
@@ -1256,6 +1262,10 @@ class AgentLoop:
             return self._config.brain.vision_mode if self._config else "reference_only"
         except Exception:
             return "reference_only"
+
+    def _nav_forced_skills(self) -> list[str] | None:
+        """nav 探索/导航启用时强制注入 nav 技能块（LLM 知道 goto/explore 动作）。"""
+        return ["nav"] if self._nav is not None else None
 
     def _interrupt_enabled(self) -> bool:
         """读取打断开关（热重载 A1：agent.interrupt.enabled 运行中可改）。"""

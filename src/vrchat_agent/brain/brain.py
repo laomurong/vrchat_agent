@@ -21,7 +21,13 @@ from .context import ConversationContext
 from .llm_client import LLMClient, LLMError
 from .memory import MemoryStore
 from .prompts import build_decision_instruction, build_memory_extract_prompt, build_system_prompt
-from .schema import Decision, _extract_json_object, _strip_trailing_commas
+from .schema import Decision, _extract_json_object, _strip_trailing_commas, decision_schema_markdown
+from .skills.core import (
+    build_decision_instruction_minimal,
+    build_system_prompt_resident,
+)
+from .skills.packs import default_registry
+from .skills.registry import SkillRegistry
 
 logger = logging.getLogger("vrchat_agent.brain")
 
@@ -43,6 +49,7 @@ class Brain:
         vision_enabled: bool = True,
         config=None,
         memory: MemoryStore | None = None,
+        skills: SkillRegistry | None = None,
     ) -> None:
         self._llm = llm
         self._context = context
@@ -51,9 +58,44 @@ class Brain:
         self._vision_enabled = vision_enabled
         self._config = config
         self._memory = memory
+        self._skills = skills
         self._last_raw: str = ""
         self._extract_counter: int = 0
         self._extract_task: asyncio.Task | None = None
+
+    # ---- Skill 式按需加载 Prompt（T03/T04）----
+    @property
+    def skills(self) -> SkillRegistry:
+        """技能注册表（默认内置注册表；每次构造独立实例，不共享 sticky 状态）。"""
+        if self._skills is None:
+            self._skills = default_registry()
+        return self._skills
+
+    def _skill_mode(self) -> str:
+        """读取 skill.mode（on_demand/full），异常回退 on_demand。"""
+        if self._config is not None:
+            try:
+                return str(self._config.brain.skill.mode or "on_demand")
+            except Exception:
+                pass
+        return "on_demand"
+
+    def _skill_resident(self) -> bool:
+        """读取 skill.resident（是否注入常驻最小动作集），异常回退 True。"""
+        if self._config is not None:
+            try:
+                return bool(self._config.brain.skill.resident)
+            except Exception:
+                pass
+        return True
+
+    def _build_active_skills(self, utterance: str, forced: list[str] | None) -> list[str]:
+        """激活技能：forced 为空自动 build_active(utterance)；非空并集。"""
+        try:
+            return self.skills.build_active(utterance, forced=forced)
+        except Exception as exc:
+            logger.warning("技能激活失败（降级为空）: %s", exc)
+            return []
 
     # ---- 热重载读取（异常回退装配期缓存值） ----
     def _persona(self) -> tuple[str, str]:
@@ -159,11 +201,36 @@ class Brain:
             "不要生硬复述）\n" + "\n".join(lines)
         )
 
-    async def decide(self, utterance: str, vision: str | None = None) -> Decision:
-        """根据玩家语音（与可选视觉画面）生成决策。"""
+    async def decide(
+        self,
+        utterance: str,
+        vision: str | None = None,
+        forced_skills: list[str] | None = None,
+    ) -> Decision:
+        """根据玩家语音（与可选视觉画面）生成决策。
+
+        :param utterance: 玩家语音转写文本
+        :param vision: 可选视觉画面 base64
+        :param forced_skills: 强制激活技能名（如 nav 探索/导航由 AgentLoop 传入；
+            非空时与关键词命中并集）
+        """
         persona_name, persona_desc = self._persona()
-        system = build_system_prompt(persona_name, persona_desc)
-        instruction = build_decision_instruction()
+        mode = self._skill_mode()
+        if mode == "full":
+            # 回退旧全量行为（常驻 + 全量动作枚举 + 全量规则 + 全量技能块）
+            system = build_system_prompt(persona_name, persona_desc)
+            instruction = build_decision_instruction()
+        else:
+            # on_demand：人设 → 最小动作集 → 技能目录 → 【已激活技能】→ 记忆 → 历史 → 玩家说
+            active = self._build_active_skills(utterance, forced_skills)
+            instruction = build_decision_instruction_minimal(
+                registry=self.skills,
+                active_packs=active,
+                schema_markdown=decision_schema_markdown(),
+                resident=self._skill_resident(),
+                catalog=self.skills.catalog(),
+            )
+            system = build_system_prompt_resident(persona_name, persona_desc)
         messages = [{"role": "system", "content": f"{system}\n\n{instruction}"}]
         # 长期记忆注入（标准版 + 任务②语义层）：按当前 utterance 语义检索相关记忆，
         # 以 [长期记忆] 节注入 system，跨会话生效；语义不可用自动回退关键词/常用记忆

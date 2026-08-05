@@ -536,6 +536,58 @@ actions:
       - tool: vrc_set_status
         args: { status: "{status}" }
 
+  # ---- VRChat API 集成扩展（T03：精选 16 动作全量接入）----
+  # 与上面 4 条同机制：vrc_* 工具由 action/mcp_actuator.py 委托 vrcapi/actions.py
+  # （VRCActionExecutor）执行；新增条目不改变既有 4 条语义。
+  vrc:get_current_user:
+    tools:
+      - tool: vrc_get_current_user
+        args: {}
+  vrc:get_own_avatar:
+    tools:
+      - tool: vrc_get_own_avatar
+        args: {}
+  vrc:search_users:
+    tools:
+      - tool: vrc_search_users
+        args: { query: "{query}", limit: 20 }
+  vrc:get_user:
+    tools:
+      - tool: vrc_get_user
+        args: { user_id: "{user_id}" }
+  vrc:friend:
+    tools:
+      - tool: vrc_friend
+        args: { user_id: "{user_id}" }
+  vrc:accept_friend_request:
+    tools:
+      - tool: vrc_accept_friend_request
+        args: { notification_id: "{notification_id}" }
+  vrc:invite_user:
+    tools:
+      - tool: vrc_invite_user
+        args: { user_id: "{user_id}" }
+  vrc:get_notifications:
+    tools:
+      - tool: vrc_get_notifications
+        args: { limit: 20 }
+  vrc:get_favorites:
+    tools:
+      - tool: vrc_get_favorites
+        args: { limit: 20 }
+  vrc:get_recent_worlds:
+    tools:
+      - tool: vrc_get_recent_worlds
+        args: { limit: 20 }
+  vrc:get_instance:
+    tools:
+      - tool: vrc_get_instance
+        args: { world_id: "{world_id}", instance_id: "{instance_id}" }
+  vrc:call_api:
+    tools:
+      - tool: vrc_call_api
+        args: { api: "{api}", args: "{args}" }
+
   # ---- 空间导航 nav:* → 伪工具（任务④，AgentLoop 拦截，不真正发 OSC）----
   # ⚠️ nav:* 不映射到任何 OSC/MCP 工具：AgentLoop._execute_actions 会拦截
   #    kind=nav 的动作交给 nav.NavController（planner/explorer）处理——

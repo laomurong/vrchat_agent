@@ -97,42 +97,22 @@ def build_system_prompt(persona_name: str, persona_desc: str) -> str:
 
 
 def build_decision_instruction() -> str:
-    """构造决策输出指令：要求 LLM 输出严格 JSON。"""
-    return f"""【你的任务】
-根据"玩家说"（语音转写文本）和"（附：当前画面，仅作参考）"（可选），决定是否回应、回应内容、语气与动作。
+    """构造决策输出指令（全量渲染兼容函数，输出与历史逐字一致）。
 
-【可执行动作类型】
-{_ACTION_KINDS}
+    实现（T02）：常驻核心（任务 / 输出格式 / 全量规则，逐字保留）由
+    skills.core 提供；动作枚举用模块级 ``_ACTION_KINDS``（历史逐字保留）；
+    新增技能块（vrc 等）经默认 SkillRegistry.full_render() 追加。旧内容
+    一条不少，新能力文档追加，测试断言（oscexpand / nav / look_turn /
+    osc_fix / oscmap）全部继续通过。
+    """
+    from .skills.core import build_decision_instruction_full
+    from .skills.packs import default_registry
 
-【输出格式】
-只输出 JSON，不要输出任何其他文字、注释或 Markdown 代码块。格式如下：
-{decision_schema_markdown()}
-
-【规则】
-- 严禁使用 Markdown 代码围栏（``` 或 ```json）包裹 JSON，直接输出 JSON 本体。
-- 玩家在和你说话 → respond=true；纯背景噪音/无意义内容 → respond=false。
-- 视觉画面仅作上下文参考：玩家没问画面时不要主动描述画面；玩家问及画面时才描述。
-- actions 中 kind 必须属于上面列出的类型；params.name 必须使用上面列出的枚举值（如 emote 的 wave）。
-- 玩家明确要求移动/转向/姿态/交互时，你**必须**在 actions 数组中包含对应的动作。只回复文字不算完成指令。无法确定的参数使用默认值（如方向不确定用 forward，duration 用 0.8）。
-- ⚠️ 玩家说的每一个动作意图（走/跑/转/蹲/坐/挥手/拿/放/看/跳），你都必须输出对应的 actions 条目。这是硬性要求。
-- emotion 取 calm/happy/sad/angry/surprised/neutral 之一。
-- 当玩家要求你"看向"或"面向"某个方向/物体时，根据画面推理目标方位，组合输出多个 look 动作
-  （如"看向左上方"→ 先 look:left 再 look:up；"转向身后"→ look:turn_left 或 look:turn_right）。
-  OSC 只能相对转向（无法绝对定位），所以用多个 look 动作近似朝向目标即可。
-- 幅度选择：要"大幅/快速"用 move:forward、look:left 这类；要"轻轻/慢慢/一点点"用
-  move:smooth_* 与 look:pan_*/tilt_* 这类平滑变体（更稳、更容易停在目标上）。
-- 你要把某个物体对准画面正中时，先判断它偏哪个方位（左/右/上/下），用 look:pan_*/tilt_* 小幅微调（每次约 10~15°）。差得远就加大 duration。示例：苹果在画面右上方 → actions:[look:pan_right, look:tilt_up]。一次最多 3 个 look 动作。
-- 玩家让你和场景里的东西互动（拿起/放下/按一下/坐下/跑起来）时输出 input 动作，
-  并配合 look/move 先朝向再交互（如"把桌上的杯子拿起来"→ look:tilt_down + input:grab_right）。
-- 抓取是"抓住不放"的持续状态：input:grab_* 之后物体一直在手里，
-  玩家说"放下/扔掉/给我"时要输出 input:drop_*（会先松手再放下）。忘了也没关系，20 秒自动松手。
-- "跑起来/快点/追上去"用 input:run（自带向前冲刺）；只是"往前走"用 move:forward。
-  想跑久一点就连续输出多个 input:run，不要用 input:run + move:forward 的组合
-  （动作是一条条依次执行的，两者不会同时生效）。
-- 手势优先用标准手势（gesture:right_peace 等，所有 avatar 都支持）；
-  avatar 自定义手势（point/thumbs_up/wave_hand）只在明确需要时用。
-- input:panic 会强制开启安全模式、影响很大，只有玩家明确要求"屏蔽所有人/紧急"时才输出。
-- 你的回复文本中不要使用颜文字（如 (๑•́ ₃ •̀๑)）或 emoji，因为语音合成会尝试读出它们、产生怪声。可以用中文拟声词代替（如"喵"、"嘿嘿"、"哈哈"）。"""
+    return build_decision_instruction_full(
+        action_kinds=_ACTION_KINDS,
+        schema_markdown=decision_schema_markdown(),
+        registry=default_registry(),
+    )
 
 
 def build_calibration_prompt(

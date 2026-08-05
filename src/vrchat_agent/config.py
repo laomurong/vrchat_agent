@@ -162,6 +162,26 @@ class MemoryConfig(BaseModel):
     semantic: SemanticMemoryConfig = Field(default_factory=SemanticMemoryConfig)
 
 
+class SkillConfig(BaseModel):
+    """Skill 式按需加载 Prompt 配置（T01/T04）。
+
+    - mode：on_demand（默认）——常驻最小动作集 + 按关键词激活技能块；
+            full——回退旧全量行为（常驻 + 全量动作枚举 + 全量规则 + 全量技能块）；
+    - max_active：每轮最多激活的非常驻技能数（依赖不计入；超出按 priority 裁剪）；
+    - max_chars：激活技能块注入总字符上限（块级裁剪，不截断中间）；
+    - sticky_turns：sticky 会话保持轮数（命中后未来 N 轮继续激活）；
+    - resident：是否注入常驻最小动作集（false 时只注入激活技能块，谨慎）；
+    - packs_dir：额外技能包 YAML 目录（相对项目根；默认 skill_packs/，不存在忽略）。
+    """
+
+    mode: Literal["on_demand", "full"] = "on_demand"
+    max_active: int = 3
+    max_chars: int = 1200
+    sticky_turns: int = 3
+    resident: bool = True
+    packs_dir: str = "skill_packs"
+
+
 class BrainConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     persona: PersonaConfig = Field(default_factory=PersonaConfig)
@@ -171,6 +191,8 @@ class BrainConfig(BaseModel):
     #   reference_only（默认）——画面照常传入 LLM 作上下文，靠 prompt 约束"不主动描述"；
     #   keyword_filter ——仅当玩家输入含视觉关键词时才采样并传入画面（更彻底但灵活性低）。
     vision_mode: Literal["reference_only", "keyword_filter"] = "reference_only"
+    # Skill 式按需加载 Prompt（任务⑤）：技能块控制（热重载：每次 decide 读取）
+    skill: SkillConfig = Field(default_factory=SkillConfig)
 
 
 class CloneTTSConfig(BaseModel):
@@ -417,7 +439,10 @@ class VRCApiConfig(BaseModel):
       才读环境变量并登录，未配置/未使用不触发任何登录；
     - enabled：总开关（false 时动作映射 vrc:* 仍可解析，执行时报清晰错误）；
     - rate_limit_seconds：VRChat API 请求最小间隔（官方对单账号请求频率敏感，
-      默认 60 秒/请求，全局串行节流）。
+      默认 60 秒/请求，全局串行节流）；
+    - allow_destructive：call_api 写操作总开关（默认 false）——为 true 时
+      非白名单写操作放行（危险操作 closed 仍拒绝）；社交白名单写操作
+      （friend/accept_friend_request/invite_user 等）默认开放 + 审计日志。
     """
 
     enabled: bool = True
@@ -425,6 +450,7 @@ class VRCApiConfig(BaseModel):
     password_env: str = "VRC_PASSWORD"
     api_key_env: str = "VRC_API_KEY"
     rate_limit_seconds: float = 60.0
+    allow_destructive: bool = False
 
 
 class NavConfig(BaseModel):

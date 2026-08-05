@@ -72,6 +72,20 @@ brain:
       top_k: 5
       device: cpu
   vision_mode: reference_only
+  # Skill 式按需加载 Prompt（任务⑤：vrchatapi 全 API 接入）：
+  #   mode=on_demand（默认）——常驻最小动作集 + 按关键词激活技能块（省 token）；
+  #   mode=full——回退旧全量行为（常驻 + 全量动作枚举 + 全量规则 + 全量技能块）。
+  #   max_active/max_chars/sticky_turns 控制激活技能块的数量/长度/会话保持。
+  skill:
+    mode: on_demand
+    max_active: 3
+    max_chars: 1200
+    sticky_turns: 3
+    resident: true
+    # 额外技能包 YAML 目录（相对项目根；默认 skill_packs/，不存在忽略）。
+    # 内置技能块（osc_gesture/osc_input/osc_look/nav/core_extra/vrc.*）已注册，
+    # 此目录仅用于追加自定义技能块（YAML 为主，Python 注册入口兜底）。
+    packs_dir: skill_packs
 speech:
   tts:
     provider: cosyvoice
@@ -174,7 +188,7 @@ web:
   port: 0
   auto_open_browser: true
 vrcapi:
-  # VRChat API 集成（任务①：换头像/查好友/找世界/更新状态）
+  # VRChat API 集成（任务① + T03：vrchatapi 全 API 接入）
   # ⚠️ 凭据一律走 .env 环境变量（VRC_USERNAME / VRC_PASSWORD / VRC_API_KEY），
   #    绝不写明文到这里；VRCAPIClient 懒加载——首次使用 vrc 动作时才登录。
   enabled: true
@@ -182,6 +196,9 @@ vrcapi:
   password_env: VRC_PASSWORD
   api_key_env: VRC_API_KEY
   rate_limit_seconds: 60.0
+  # call_api 写操作总开关（默认 false）：为 true 时非白名单写操作放行
+  # （危险操作 closed 仍拒绝）；社交白名单写操作默认开放 + 审计日志。
+  allow_destructive: false
 nav:
   # 空间导航（任务④：拓扑导航——VRChat OSC 无绝对坐标，只能
   # 节点=视觉地标指纹 + 边=相对动作序列，每步重定位防累积误差）。

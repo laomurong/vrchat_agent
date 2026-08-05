@@ -195,6 +195,50 @@ def _load_config(path: str | Path | None = None) -> Config:
     return Config.load(p)
 
 
+def _build_skill_registry(config: Config):
+    """装配 Skill 式按需加载 Prompt 注册表（T03/T04）。
+
+    内置技能块（osc_gesture/osc_input/osc_look/nav/core_extra/vrc.*）由
+    skills.packs.default_registry 注册；随后追加 config.brain.skill.packs_dir
+    目录下所有 ``*.yaml`` 技能包（不存在目录则跳过，不报错）。
+    每次调用返回新实例（避免跨 Brain 共享 sticky 会话状态）。
+    """
+    from .brain.skills.packs import default_registry
+
+    skill_cfg = config.brain.skill
+    registry = default_registry(
+        max_active=int(getattr(skill_cfg, "max_active", 3) or 3),
+        max_chars=int(getattr(skill_cfg, "max_chars", 1200) or 1200),
+        sticky_turns=int(getattr(skill_cfg, "sticky_turns", 3) or 3),
+    )
+    packs_dir = str(getattr(skill_cfg, "packs_dir", "") or "").strip()
+    if packs_dir:
+        packs_path = Path(packs_dir)
+        if not packs_path.is_absolute():
+            packs_path = PROJECT_ROOT / packs_path
+        if packs_path.is_dir():
+            for yaml_file in sorted(packs_path.glob("*.yaml")):
+                try:
+                    registry.load_yaml(yaml_file)
+                    logger.info("技能包 YAML 加载: %s", yaml_file)
+                except Exception as exc:  # noqa: BLE001 - 单个技能包失败不阻断启动
+                    logger.warning("技能包 YAML 加载失败（跳过）: %s — %s", yaml_file, exc)
+        elif packs_path.exists():
+            try:
+                registry.load_yaml(packs_path)
+                logger.info("技能包 YAML 加载: %s", packs_path)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("技能包 YAML 加载失败（跳过）: %s — %s", packs_path, exc)
+    logger.info(
+        "Skill 注册表就绪: %d 个技能块（mode=%s, max_active=%d, max_chars=%d）",
+        len(registry),
+        getattr(skill_cfg, "mode", "on_demand"),
+        getattr(skill_cfg, "max_active", 3),
+        getattr(skill_cfg, "max_chars", 1200),
+    )
+    return registry
+
+
 async def build_and_run(config: Config) -> None:
     """装配全部组件并启动（供 main() 调用，也便于测试）。"""
     from .logging_setup import UsageTracker, get_logger, setup_logging
@@ -321,6 +365,8 @@ async def build_and_run(config: Config) -> None:
         config.brain.memory.max_items,
         "已接线（懒加载）" if semantic_store is not None else "未启用（关键词匹配）",
     )
+    # Skill 式按需加载 Prompt（T03/T04）：内置技能块 + 追加 skill_packs/*.yaml
+    skills = _build_skill_registry(config)
     brain = Brain(
         llm=llm,
         context=context,
@@ -329,6 +375,7 @@ async def build_and_run(config: Config) -> None:
         vision_enabled=config.brain.llm.vision_enabled,
         config=config,
         memory=memory_store,
+        skills=skills,
     )
 
     # ------------------------------------------------------------------
@@ -369,7 +416,11 @@ async def build_and_run(config: Config) -> None:
                 api_key_env=config.vrcapi.api_key_env,
                 rate_limit_seconds=config.vrcapi.rate_limit_seconds,
             )
-            vrc_executor = VRCActionExecutor(vrc_client)
+            # T03：call_api 写操作总开关（默认 false；危险操作 closed 仍拒绝）
+            vrc_executor = VRCActionExecutor(
+                vrc_client,
+                allow_destructive=bool(getattr(config.vrcapi, "allow_destructive", False)),
+            )
             logger.info("VRChat API 执行器已就绪（vrc 动作可用，懒加载登录）")
     except Exception as exc:  # noqa: BLE001 - 初始化失败仅降级（vrc 动作不可用），不阻断启动
         logger.warning("VRChat API 执行器初始化失败（vrc 动作将不可用）: %s", exc)

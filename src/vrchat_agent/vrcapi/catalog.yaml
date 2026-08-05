@@ -1,0 +1,2540 @@
+version: 1
+generated_by: scripts/gen_vrcapi_catalog.py
+note: 由已安装 vrchatapi SDK 自动生成；改 SDK 版本后请重新运行生成脚本。
+apis:
+  authentication:
+    methods:
+      cancel_pending2_fa:
+        verb: DELETE
+        path: /auth/twofactorauth/totp/pending
+        params: []
+        read_only: false
+        security: closed
+        desc: Cancel pending enabling of time-based 2FA codes
+      check_user_exists:
+        verb: GET
+        path: /auth/exists
+        params:
+        - email
+        - display_name
+        - username
+        - exclude_user_id
+        read_only: true
+        security: open
+        desc: Check User Exists
+      confirm_email:
+        verb: GET
+        path: /auth/confirmEmail
+        params:
+        - id
+        - verify_email
+        read_only: true
+        security: open
+        desc: Confirm Email
+      create_global_avatar_moderation:
+        verb: POST
+        path: /auth/user/avatarmoderations
+        params:
+        - create_avatar_moderation_request
+        read_only: false
+        security: whitelist
+        desc: Create Global Avatar Moderation
+      delete_global_avatar_moderation:
+        verb: DELETE
+        path: /auth/user/avatarmoderations
+        params:
+        - target_avatar_id
+        - avatar_moderation_type
+        read_only: false
+        security: whitelist
+        desc: Delete Global Avatar Moderation
+      delete_moderation_report:
+        verb: DELETE
+        path: /moderationReports/{moderationReportId}
+        params:
+        - moderation_report_id
+        read_only: false
+        security: whitelist
+        desc: Delete Moderation Report
+      delete_user:
+        verb: PUT
+        path: /users/{userId}/delete
+        params:
+        - user_id
+        read_only: false
+        security: closed
+        desc: Delete User
+      disable2_fa:
+        verb: DELETE
+        path: /auth/twofactorauth
+        params: []
+        read_only: false
+        security: closed
+        desc: Disable 2FA
+      enable2_fa:
+        verb: POST
+        path: /auth/twofactorauth/totp/pending
+        params: []
+        read_only: false
+        security: closed
+        desc: Enable time-based 2FA codes
+      get_current_user:
+        verb: GET
+        path: /auth/user
+        params: []
+        read_only: true
+        security: open
+        desc: Login and/or Get Current User Info
+      get_global_avatar_moderations:
+        verb: GET
+        path: /auth/user/avatarmoderations
+        params: []
+        read_only: true
+        security: open
+        desc: Get Global Avatar Moderations
+      get_moderation_reports:
+        verb: GET
+        path: /moderationReports
+        params:
+        - offset
+        - n
+        - reporting_user_id
+        - status
+        - type
+        read_only: true
+        security: open
+        desc: Get Moderation Reports
+      get_recovery_codes:
+        verb: GET
+        path: /auth/user/twofactorauth/otp
+        params: []
+        read_only: true
+        security: open
+        desc: Get 2FA Recovery codes
+      logout:
+        verb: PUT
+        path: /logout
+        params: []
+        read_only: false
+        security: whitelist
+        desc: Logout
+      register_user_account:
+        verb: POST
+        path: /auth/register
+        params:
+        - register_user_account_request
+        read_only: false
+        security: closed
+        desc: Register User Account
+      resend_email_confirmation:
+        verb: POST
+        path: /auth/user/resendEmail
+        params: []
+        read_only: false
+        security: closed
+        desc: Resend Email Confirmation
+      submit_moderation_report:
+        verb: POST
+        path: /moderationReports
+        params:
+        - submit_moderation_report_request
+        read_only: false
+        security: whitelist
+        desc: Submit Moderation Report
+      verify2_fa:
+        verb: POST
+        path: /auth/twofactorauth/totp/verify
+        params:
+        - two_factor_auth_code
+        read_only: false
+        security: closed
+        desc: Verify 2FA code
+      verify2_fa_email_code:
+        verb: POST
+        path: /auth/twofactorauth/emailotp/verify
+        params:
+        - two_factor_email_code
+        read_only: false
+        security: closed
+        desc: Verify 2FA email code
+      verify_auth_token:
+        verb: GET
+        path: /auth
+        params: []
+        read_only: true
+        security: open
+        desc: Verify Auth Token
+      verify_login_place:
+        verb: GET
+        path: /auth/verifyLoginPlace
+        params:
+        - token
+        - user_id
+        read_only: true
+        security: open
+        desc: Verify Login Place
+      verify_pending2_fa:
+        verb: POST
+        path: /auth/twofactorauth/totp/pending/verify
+        params:
+        - two_factor_auth_code
+        read_only: false
+        security: closed
+        desc: Verify Pending 2FA code
+      verify_recovery_code:
+        verb: POST
+        path: /auth/twofactorauth/otp/verify
+        params:
+        - two_factor_auth_code
+        read_only: false
+        security: closed
+        desc: Verify 2FA code with Recovery code
+  avatars:
+    methods:
+      create_avatar:
+        verb: POST
+        path: /avatars
+        params:
+        - create_avatar_request
+        read_only: false
+        security: closed
+        desc: Create Avatar
+      delete_avatar:
+        verb: DELETE
+        path: /avatars/{avatarId}
+        params:
+        - avatar_id
+        read_only: false
+        security: closed
+        desc: Delete Avatar
+      delete_impostor:
+        verb: DELETE
+        path: /avatars/{avatarId}/impostor
+        params:
+        - avatar_id
+        read_only: false
+        security: closed
+        desc: Delete generated Impostor
+      enqueue_impostor:
+        verb: POST
+        path: /avatars/{avatarId}/impostor/enqueue
+        params:
+        - avatar_id
+        read_only: false
+        security: closed
+        desc: Enqueue Impostor generation
+      get_avatar:
+        verb: GET
+        path: /avatars/{avatarId}
+        params:
+        - avatar_id
+        read_only: true
+        security: open
+        desc: Get Avatar
+      get_avatar_styles:
+        verb: GET
+        path: /avatarStyles
+        params: []
+        read_only: true
+        security: open
+        desc: Get Avatar Styles
+      get_favorited_avatars:
+        verb: GET
+        path: /avatars/favorites
+        params:
+        - featured
+        - sort
+        - n
+        - order
+        - offset
+        - search
+        - tag
+        - notag
+        - release_status
+        - max_unity_version
+        - min_unity_version
+        - platform
+        - user_id
+        read_only: true
+        security: open
+        desc: List Favorited Avatars
+      get_impostor_queue_stats:
+        verb: GET
+        path: /avatars/impostor/queue/stats
+        params: []
+        read_only: true
+        security: open
+        desc: Get Impostor Queue Stats
+      get_licensed_avatars:
+        verb: GET
+        path: /avatars/licensed
+        params:
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List Licensed Avatars
+      get_own_avatar:
+        verb: GET
+        path: /users/{userId}/avatar
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Own Avatar
+      search_avatars:
+        verb: GET
+        path: /avatars
+        params:
+        - featured
+        - sort
+        - user
+        - user_id
+        - n
+        - order
+        - offset
+        - tag
+        - notag
+        - release_status
+        - max_unity_version
+        - min_unity_version
+        - platform
+        - is_internal_variant
+        read_only: true
+        security: open
+        desc: Search Avatars
+      select_avatar:
+        verb: PUT
+        path: /avatars/{avatarId}/select
+        params:
+        - avatar_id
+        read_only: false
+        security: whitelist
+        desc: Select Avatar
+      select_fallback_avatar:
+        verb: PUT
+        path: /avatars/{avatarId}/selectFallback
+        params:
+        - avatar_id
+        read_only: false
+        security: whitelist
+        desc: Select Fallback Avatar
+      update_avatar:
+        verb: PUT
+        path: /avatars/{avatarId}
+        params:
+        - avatar_id
+        - update_avatar_request
+        read_only: false
+        security: whitelist
+        desc: Update Avatar
+  calendar:
+    methods:
+      create_group_calendar_event:
+        verb: POST
+        path: /calendar/{groupId}/event
+        params:
+        - group_id
+        - create_calendar_event_request
+        read_only: false
+        security: closed
+        desc: Create a calendar event
+      delete_group_calendar_event:
+        verb: DELETE
+        path: /calendar/{groupId}/{calendarId}
+        params:
+        - group_id
+        - calendar_id
+        read_only: false
+        security: closed
+        desc: Delete a calendar event
+      discover_calendar_events:
+        verb: GET
+        path: /calendar/discover
+        params:
+        - scope
+        - categories
+        - tags
+        - featured_results
+        - non_featured_results
+        - personalized_results
+        - minimum_interest_count
+        - minimum_remaining_minutes
+        - upcoming_offset_minutes
+        - n
+        - next_cursor
+        read_only: true
+        security: open
+        desc: Discover calendar events
+      follow_group_calendar_event:
+        verb: POST
+        path: /calendar/{groupId}/{calendarId}/follow
+        params:
+        - group_id
+        - calendar_id
+        - follow_calendar_event_request
+        read_only: false
+        security: closed
+        desc: Follow a calendar event
+      get_calendar_events:
+        verb: GET
+        path: /calendar
+        params:
+        - date
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List calendar events
+      get_featured_calendar_events:
+        verb: GET
+        path: /calendar/featured
+        params:
+        - date
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List featured calendar events
+      get_followed_calendar_events:
+        verb: GET
+        path: /calendar/following
+        params:
+        - date
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List followed calendar events
+      get_group_calendar_event:
+        verb: GET
+        path: /calendar/{groupId}/{calendarId}
+        params:
+        - group_id
+        - calendar_id
+        read_only: true
+        security: open
+        desc: Get a calendar event
+      get_group_calendar_event_ics:
+        verb: GET
+        path: /calendar/{groupId}/{calendarId}.ics
+        params:
+        - group_id
+        - calendar_id
+        read_only: true
+        security: open
+        desc: Download calendar event as ICS
+      get_group_calendar_events:
+        verb: GET
+        path: /calendar/{groupId}
+        params:
+        - group_id
+        - date
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List a group's calendar events
+      get_group_next_calendar_event:
+        verb: GET
+        path: /calendar/{groupId}/next
+        params:
+        - group_id
+        read_only: true
+        security: open
+        desc: Get next calendar event
+      search_calendar_events:
+        verb: GET
+        path: /calendar/search
+        params:
+        - search_term
+        - utc_offset
+        - n
+        - offset
+        - is_internal_variant
+        read_only: true
+        security: open
+        desc: Search for calendar events
+      update_group_calendar_event:
+        verb: PUT
+        path: /calendar/{groupId}/{calendarId}/event
+        params:
+        - group_id
+        - calendar_id
+        - update_calendar_event_request
+        read_only: false
+        security: closed
+        desc: Update a calendar event
+  economy:
+    methods:
+      get_active_licenses:
+        verb: GET
+        path: /economy/licenses/active
+        params: []
+        read_only: true
+        security: open
+        desc: Get Active Licenses
+      get_balance:
+        verb: GET
+        path: /user/{userId}/balance
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Balance
+      get_balance_earnings:
+        verb: GET
+        path: /user/{userId}/balance/earnings
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Balance Earnings
+      get_bulk_gift_purchases:
+        verb: GET
+        path: /user/bulk/gift/purchases
+        params:
+        - most_recent
+        read_only: true
+        security: open
+        desc: Get Bulk Gift Purchases
+      get_current_subscriptions:
+        verb: GET
+        path: /auth/user/subscription
+        params: []
+        read_only: true
+        security: open
+        desc: Get Current Subscriptions
+      get_economy_account:
+        verb: GET
+        path: /user/{userId}/economy/account
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Economy Account
+      get_license_group:
+        verb: GET
+        path: /licenseGroups/{licenseGroupId}
+        params:
+        - license_group_id
+        read_only: true
+        security: open
+        desc: Get License Group
+      get_product_listing:
+        verb: GET
+        path: /listing/{productId}
+        params:
+        - product_id
+        - hydrate
+        read_only: true
+        security: open
+        desc: Get Product Listing
+      get_product_listing_alternate:
+        verb: GET
+        path: /products/{productId}
+        params:
+        - product_id
+        read_only: true
+        security: open
+        desc: Get Product Listing (alternate)
+      get_product_listings:
+        verb: GET
+        path: /user/{userId}/listings
+        params:
+        - user_id
+        - n
+        - offset
+        - hydrate
+        - group_id
+        - active
+        read_only: true
+        security: open
+        desc: Get User Product Listings
+      get_product_purchases:
+        verb: GET
+        path: /economy/purchases
+        params:
+        - buyer_id
+        - n
+        - offset
+        - most_recent
+        - sort
+        - order
+        read_only: true
+        security: open
+        desc: Get Product Purchases
+      get_recent_subscription:
+        verb: GET
+        path: /user/subscription/recent
+        params: []
+        read_only: true
+        security: open
+        desc: Get Recent Subscription
+      get_steam_transaction:
+        verb: GET
+        path: /Steam/transactions/{transactionId}
+        params:
+        - transaction_id
+        read_only: true
+        security: open
+        desc: Get Steam Transaction
+      get_steam_transactions:
+        verb: GET
+        path: /Steam/transactions
+        params: []
+        read_only: true
+        security: open
+        desc: List Steam Transactions
+      get_store:
+        verb: GET
+        path: /economy/store
+        params:
+        - store_id
+        - hydrate_listings
+        - hydrate_products
+        read_only: true
+        security: open
+        desc: Get Store
+      get_store_shelves:
+        verb: GET
+        path: /economy/store/shelves
+        params:
+        - store_id
+        - hydrate_listings
+        - fetch
+        read_only: true
+        security: open
+        desc: Get Store Shelves
+      get_subscriptions:
+        verb: GET
+        path: /subscriptions
+        params: []
+        read_only: true
+        security: open
+        desc: List Subscriptions
+      get_tilia_status:
+        verb: GET
+        path: /tilia/status
+        params: []
+        read_only: true
+        security: open
+        desc: Get Tilia Status
+      get_tilia_tos:
+        verb: GET
+        path: /user/{userId}/tilia/tos
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Tilia TOS Agreement Status
+      get_token_bundles:
+        verb: GET
+        path: /tokenBundles
+        params: []
+        read_only: true
+        security: open
+        desc: List Token Bundles
+      get_user_credits_eligible:
+        verb: GET
+        path: /users/{userId}/credits/eligible
+        params:
+        - user_id
+        - subscription_id
+        read_only: true
+        security: open
+        desc: Get User Credits Eligiblity
+      get_user_subscription_eligible:
+        verb: GET
+        path: /users/{userId}/subscription/eligible
+        params:
+        - user_id
+        - steam_id
+        read_only: true
+        security: open
+        desc: Get User Subscription Eligiblity
+      purchase_product_listing:
+        verb: POST
+        path: /economy/purchase/listing
+        params:
+        - purchase_product_listing_request
+        read_only: false
+        security: closed
+        desc: Purchase Product Listing
+      update_tilia_tos:
+        verb: PUT
+        path: /user/{userId}/tilia/tos
+        params:
+        - user_id
+        - update_tilia_tos_request
+        read_only: false
+        security: whitelist
+        desc: Update Tilia TOS Agreement Status
+  favorites:
+    methods:
+      add_favorite:
+        verb: POST
+        path: /favorites
+        params:
+        - add_favorite_request
+        read_only: false
+        security: whitelist
+        desc: Add Favorite
+      clear_favorite_group:
+        verb: DELETE
+        path: /favorite/group/{favoriteGroupType}/{favoriteGroupName}/{userId}
+        params:
+        - favorite_group_type
+        - favorite_group_name
+        - user_id
+        read_only: false
+        security: whitelist
+        desc: Clear Favorite Group
+      get_favorite_group:
+        verb: GET
+        path: /favorite/group/{favoriteGroupType}/{favoriteGroupName}/{userId}
+        params:
+        - favorite_group_type
+        - favorite_group_name
+        - user_id
+        read_only: true
+        security: open
+        desc: Show Favorite Group
+      get_favorite_groups:
+        verb: GET
+        path: /favorite/groups
+        params:
+        - n
+        - offset
+        - user_id
+        - owner_id
+        read_only: true
+        security: open
+        desc: List Favorite Groups
+      get_favorite_limits:
+        verb: GET
+        path: /auth/user/favoritelimits
+        params: []
+        read_only: true
+        security: open
+        desc: Get Favorite Limits
+      get_favorites:
+        verb: GET
+        path: /favorites
+        params:
+        - n
+        - offset
+        - type
+        - tag
+        read_only: true
+        security: open
+        desc: List Favorites
+      remove_favorite:
+        verb: DELETE
+        path: /favorites/{favoriteId}
+        params:
+        - favorite_id
+        read_only: false
+        security: whitelist
+        desc: Remove Favorite
+      update_favorite_group:
+        verb: PUT
+        path: /favorite/group/{favoriteGroupType}/{favoriteGroupName}/{userId}
+        params:
+        - favorite_group_type
+        - favorite_group_name
+        - user_id
+        - update_favorite_group_request
+        read_only: false
+        security: whitelist
+        desc: Update Favorite Group
+  files:
+    methods:
+      create_file:
+        verb: POST
+        path: /file
+        params:
+        - create_file_request
+        read_only: false
+        security: closed
+        desc: Create File
+      create_file_version:
+        verb: POST
+        path: /file/{fileId}
+        params:
+        - file_id
+        - create_file_version_request
+        read_only: false
+        security: closed
+        desc: Create File Version
+      delete_file:
+        verb: DELETE
+        path: /file/{fileId}
+        params:
+        - file_id
+        read_only: false
+        security: closed
+        desc: Delete File
+      delete_file_version:
+        verb: DELETE
+        path: /file/{fileId}/{versionId}
+        params:
+        - file_id
+        - version_id
+        read_only: false
+        security: closed
+        desc: Delete File Version
+      download_file_version:
+        verb: GET
+        path: /file/{fileId}/{versionId}
+        params:
+        - file_id
+        - version_id
+        read_only: true
+        security: open
+        desc: Download File Version
+      finish_file_data_upload:
+        verb: PUT
+        path: /file/{fileId}/{versionId}/{fileType}/finish
+        params:
+        - file_id
+        - version_id
+        - file_type
+        - finish_file_data_upload_request
+        read_only: false
+        security: closed
+        desc: Finish FileData Upload
+      get_admin_asset_bundle:
+        verb: GET
+        path: /adminassetbundles/{adminAssetBundleId}
+        params:
+        - admin_asset_bundle_id
+        read_only: true
+        security: open
+        desc: Get AdminAssetBundle
+      get_content_agreement_status:
+        verb: GET
+        path: /agreement
+        params:
+        - agreement_code
+        - content_id
+        - version
+        read_only: true
+        security: open
+        desc: Get Content Agreement Status
+      get_file:
+        verb: GET
+        path: /file/{fileId}
+        params:
+        - file_id
+        read_only: true
+        security: open
+        desc: Show File
+      get_file_analysis:
+        verb: GET
+        path: /analysis/{fileId}/{versionId}
+        params:
+        - file_id
+        - version_id
+        read_only: true
+        security: open
+        desc: Get File Version Analysis
+      get_file_analysis_security:
+        verb: GET
+        path: /analysis/{fileId}/{versionId}/security
+        params:
+        - file_id
+        - version_id
+        read_only: true
+        security: open
+        desc: Get File Version Analysis Security
+      get_file_analysis_standard:
+        verb: GET
+        path: /analysis/{fileId}/{versionId}/standard
+        params:
+        - file_id
+        - version_id
+        read_only: true
+        security: open
+        desc: Get File Version Analysis Standard
+      get_file_data_upload_status:
+        verb: GET
+        path: /file/{fileId}/{versionId}/{fileType}/status
+        params:
+        - file_id
+        - version_id
+        - file_type
+        read_only: true
+        security: open
+        desc: Check FileData Upload Status
+      get_files:
+        verb: GET
+        path: /files
+        params:
+        - tag
+        - user_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List Files
+      set_group_gallery_file_order:
+        verb: PUT
+        path: /files/order
+        params:
+        - group_gallery_file_order_request
+        read_only: false
+        security: whitelist
+        desc: Set Group Gallery File Order
+      start_file_data_upload:
+        verb: PUT
+        path: /file/{fileId}/{versionId}/{fileType}/start
+        params:
+        - file_id
+        - version_id
+        - file_type
+        - part_number
+        read_only: false
+        security: closed
+        desc: Start FileData Upload
+      submit_content_agreement:
+        verb: POST
+        path: /agreement
+        params:
+        - agreement_request
+        read_only: false
+        security: whitelist
+        desc: Submit Content Agreement
+      update_asset_review_notes:
+        verb: PUT
+        path: /assetReview/{assetReviewId}/notes
+        params:
+        - asset_review_id
+        - update_asset_review_notes_request
+        read_only: false
+        security: whitelist
+        desc: Update Asset Review Notes
+      upload_gallery_image:
+        verb: POST
+        path: /gallery
+        params:
+        - file
+        read_only: false
+        security: closed
+        desc: Upload gallery image
+      upload_icon:
+        verb: POST
+        path: /icon
+        params:
+        - file
+        read_only: false
+        security: closed
+        desc: Upload icon
+      upload_image:
+        verb: POST
+        path: /file/image
+        params:
+        - file
+        - tag
+        - animation_style
+        - frames
+        - frames_over_time
+        - loop_style
+        - mask_tag
+        read_only: false
+        security: closed
+        desc: Upload gallery image, icon, emoji or sticker
+  friends:
+    methods:
+      boop:
+        verb: POST
+        path: /users/{userId}/boop
+        params:
+        - user_id
+        - boop_request
+        read_only: false
+        security: whitelist
+        desc: Send Boop
+      delete_friend_request:
+        verb: DELETE
+        path: /user/{userId}/friendRequest
+        params:
+        - user_id
+        read_only: false
+        security: whitelist
+        desc: Delete Friend Request
+      friend:
+        verb: POST
+        path: /user/{userId}/friendRequest
+        params:
+        - user_id
+        read_only: false
+        security: whitelist
+        desc: Send Friend Request
+      get_friend_status:
+        verb: GET
+        path: /user/{userId}/friendStatus
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Check Friend Status
+      get_friends:
+        verb: GET
+        path: /auth/user/friends
+        params:
+        - offset
+        - n
+        - offline
+        read_only: true
+        security: open
+        desc: List Friends
+      unfriend:
+        verb: DELETE
+        path: /auth/user/friends/{userId}
+        params:
+        - user_id
+        read_only: false
+        security: whitelist
+        desc: Unfriend
+  groups:
+    methods:
+      add_group_gallery_image:
+        verb: POST
+        path: /groups/{groupId}/galleries/{groupGalleryId}/images
+        params:
+        - group_id
+        - group_gallery_id
+        - add_group_gallery_image_request
+        read_only: false
+        security: closed
+        desc: Add Group Gallery Image
+      add_group_member_role:
+        verb: PUT
+        path: /groups/{groupId}/members/{userId}/roles/{groupRoleId}
+        params:
+        - group_id
+        - user_id
+        - group_role_id
+        read_only: false
+        security: closed
+        desc: Add Role to GroupMember
+      add_group_post:
+        verb: POST
+        path: /groups/{groupId}/posts
+        params:
+        - group_id
+        - create_group_post_request
+        read_only: false
+        security: closed
+        desc: Create a post in a Group
+      ban_group_member:
+        verb: POST
+        path: /groups/{groupId}/bans
+        params:
+        - group_id
+        - ban_group_member_request
+        read_only: false
+        security: closed
+        desc: Ban Group Member
+      block_group:
+        verb: POST
+        path: /groups/{groupId}/block
+        params:
+        - group_id
+        read_only: false
+        security: closed
+        desc: Block Group
+      cancel_group_request:
+        verb: DELETE
+        path: /groups/{groupId}/requests
+        params:
+        - group_id
+        read_only: false
+        security: whitelist
+        desc: Cancel Group Join Request
+      cancel_group_transfer:
+        verb: DELETE
+        path: /groups/{groupId}/transfer
+        params:
+        - group_id
+        read_only: false
+        security: closed
+        desc: Cancel Group Transfer
+      create_group:
+        verb: POST
+        path: /groups
+        params:
+        - create_group_request
+        read_only: false
+        security: closed
+        desc: Create Group
+      create_group_announcement:
+        verb: POST
+        path: /groups/{groupId}/announcement
+        params:
+        - group_id
+        - create_group_announcement_request
+        read_only: false
+        security: closed
+        desc: Create Group Announcement
+      create_group_gallery:
+        verb: POST
+        path: /groups/{groupId}/galleries
+        params:
+        - group_id
+        - create_group_gallery_request
+        read_only: false
+        security: closed
+        desc: Create Group Gallery
+      create_group_invite:
+        verb: POST
+        path: /groups/{groupId}/invites
+        params:
+        - group_id
+        - create_group_invite_request
+        read_only: false
+        security: closed
+        desc: Invite User to Group
+      create_group_role:
+        verb: POST
+        path: /groups/{groupId}/roles
+        params:
+        - group_id
+        - create_group_role_request
+        read_only: false
+        security: closed
+        desc: Create GroupRole
+      decline_group_invite:
+        verb: PUT
+        path: /groups/{groupId}/invites
+        params:
+        - group_id
+        - decline_group_invite_request
+        read_only: false
+        security: whitelist
+        desc: Decline Invite from Group
+      delete_group:
+        verb: DELETE
+        path: /groups/{groupId}
+        params:
+        - group_id
+        - hard_delete
+        read_only: false
+        security: closed
+        desc: Delete Group
+      delete_group_announcement:
+        verb: DELETE
+        path: /groups/{groupId}/announcement
+        params:
+        - group_id
+        read_only: false
+        security: closed
+        desc: Delete Group Announcement
+      delete_group_gallery:
+        verb: DELETE
+        path: /groups/{groupId}/galleries/{groupGalleryId}
+        params:
+        - group_id
+        - group_gallery_id
+        read_only: false
+        security: closed
+        desc: Delete Group Gallery
+      delete_group_gallery_image:
+        verb: DELETE
+        path: /groups/{groupId}/galleries/{groupGalleryId}/images/{groupGalleryImageId}
+        params:
+        - group_id
+        - group_gallery_id
+        - group_gallery_image_id
+        read_only: false
+        security: closed
+        desc: Delete Group Gallery Image
+      delete_group_invite:
+        verb: DELETE
+        path: /groups/{groupId}/invites/{userId}
+        params:
+        - group_id
+        - user_id
+        read_only: false
+        security: closed
+        desc: Delete User Invite
+      delete_group_post:
+        verb: DELETE
+        path: /groups/{groupId}/posts/{notificationId}
+        params:
+        - group_id
+        - notification_id
+        read_only: false
+        security: closed
+        desc: Delete a Group post
+      delete_group_role:
+        verb: DELETE
+        path: /groups/{groupId}/roles/{groupRoleId}
+        params:
+        - group_id
+        - group_role_id
+        read_only: false
+        security: closed
+        desc: Delete Group Role
+      get_group:
+        verb: GET
+        path: /groups/{groupId}
+        params:
+        - group_id
+        - include_roles
+        read_only: true
+        security: open
+        desc: Get Group by ID
+      get_group_announcements:
+        verb: GET
+        path: /groups/{groupId}/announcement
+        params:
+        - group_id
+        read_only: true
+        security: open
+        desc: Get Group Announcement
+      get_group_audit_log_entry_types:
+        verb: GET
+        path: /groups/{groupId}/auditLogTypes
+        params:
+        - group_id
+        read_only: true
+        security: open
+        desc: Get Group Audit Log Entry Types
+      get_group_audit_logs:
+        verb: GET
+        path: /groups/{groupId}/auditLogs
+        params:
+        - group_id
+        - n
+        - offset
+        - start_date
+        - end_date
+        - actor_ids
+        - event_types
+        - target_ids
+        read_only: true
+        security: open
+        desc: Get Group Audit Logs
+      get_group_bans:
+        verb: GET
+        path: /groups/{groupId}/bans
+        params:
+        - group_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Get Group Bans
+      get_group_gallery_images:
+        verb: GET
+        path: /groups/{groupId}/galleries/{groupGalleryId}
+        params:
+        - group_id
+        - group_gallery_id
+        - n
+        - offset
+        - approved
+        read_only: true
+        security: open
+        desc: Get Group Gallery Images
+      get_group_instances:
+        verb: GET
+        path: /groups/{groupId}/instances
+        params:
+        - group_id
+        read_only: true
+        security: open
+        desc: Get Group Instances
+      get_group_invites:
+        verb: GET
+        path: /groups/{groupId}/invites
+        params:
+        - group_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Get Group Invites Sent
+      get_group_member:
+        verb: GET
+        path: /groups/{groupId}/members/{userId}
+        params:
+        - group_id
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Group Member
+      get_group_members:
+        verb: GET
+        path: /groups/{groupId}/members
+        params:
+        - group_id
+        - n
+        - offset
+        - sort
+        - role_id
+        read_only: true
+        security: open
+        desc: List Group Members
+      get_group_permissions:
+        verb: GET
+        path: /groups/{groupId}/permissions
+        params:
+        - group_id
+        read_only: true
+        security: open
+        desc: List Group Permissions
+      get_group_posts:
+        verb: GET
+        path: /groups/{groupId}/posts
+        params:
+        - group_id
+        - n
+        - offset
+        - public_only
+        read_only: true
+        security: open
+        desc: Get posts from a Group
+      get_group_requests:
+        verb: GET
+        path: /groups/{groupId}/requests
+        params:
+        - group_id
+        - n
+        - offset
+        - blocked
+        read_only: true
+        security: open
+        desc: Get Group Join Requests
+      get_group_role_templates:
+        verb: GET
+        path: /groups/roleTemplates
+        params: []
+        read_only: true
+        security: open
+        desc: Get Group Role Templates
+      get_group_roles:
+        verb: GET
+        path: /groups/{groupId}/roles
+        params:
+        - group_id
+        read_only: true
+        security: open
+        desc: Get Group Roles
+      get_group_transferability:
+        verb: GET
+        path: /groups/{groupId}/transfer
+        params:
+        - group_id
+        - transfer_target_id
+        read_only: true
+        security: open
+        desc: Get Group Transferability
+      initiate_or_accept_group_transfer:
+        verb: POST
+        path: /groups/{groupId}/transfer
+        params:
+        - group_id
+        - transfer_group_request
+        read_only: false
+        security: closed
+        desc: Initiate or Accept Group Transfer
+      join_group:
+        verb: POST
+        path: /groups/{groupId}/join
+        params:
+        - group_id
+        - confirm_override_block
+        - join_group_request
+        read_only: false
+        security: whitelist
+        desc: Join Group
+      kick_group_member:
+        verb: DELETE
+        path: /groups/{groupId}/members/{userId}
+        params:
+        - group_id
+        - user_id
+        read_only: false
+        security: closed
+        desc: Kick Group Member
+      leave_group:
+        verb: POST
+        path: /groups/{groupId}/leave
+        params:
+        - group_id
+        read_only: false
+        security: whitelist
+        desc: Leave Group
+      remove_group_member_role:
+        verb: DELETE
+        path: /groups/{groupId}/members/{userId}/roles/{groupRoleId}
+        params:
+        - group_id
+        - user_id
+        - group_role_id
+        read_only: false
+        security: closed
+        desc: Remove Role from GroupMember
+      respond_group_join_request:
+        verb: PUT
+        path: /groups/{groupId}/requests/{userId}
+        params:
+        - group_id
+        - user_id
+        - respond_group_join_request
+        read_only: false
+        security: closed
+        desc: Respond Group Join request
+      search_group_members:
+        verb: GET
+        path: /groups/{groupId}/members/search
+        params:
+        - group_id
+        - query
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Search Group Members
+      search_groups:
+        verb: GET
+        path: /groups
+        params:
+        - query
+        - offset
+        - n
+        read_only: true
+        security: open
+        desc: Search Group
+      unban_group_member:
+        verb: DELETE
+        path: /groups/{groupId}/bans/{userId}
+        params:
+        - group_id
+        - user_id
+        read_only: false
+        security: closed
+        desc: Unban Group Member
+      update_group:
+        verb: PUT
+        path: /groups/{groupId}
+        params:
+        - group_id
+        - update_group_request
+        read_only: false
+        security: closed
+        desc: Update Group
+      update_group_gallery:
+        verb: PUT
+        path: /groups/{groupId}/galleries/{groupGalleryId}
+        params:
+        - group_id
+        - group_gallery_id
+        - update_group_gallery_request
+        read_only: false
+        security: closed
+        desc: Update Group Gallery
+      update_group_member:
+        verb: PUT
+        path: /groups/{groupId}/members/{userId}
+        params:
+        - group_id
+        - user_id
+        - update_group_member_request
+        read_only: false
+        security: closed
+        desc: Update Group Member
+      update_group_post:
+        verb: PUT
+        path: /groups/{groupId}/posts/{notificationId}
+        params:
+        - group_id
+        - notification_id
+        - create_group_post_request
+        read_only: false
+        security: closed
+        desc: Edits a Group post
+      update_group_representation:
+        verb: PUT
+        path: /groups/{groupId}/representation
+        params:
+        - group_id
+        - update_group_representation_request
+        read_only: false
+        security: closed
+        desc: Update Group Representation
+      update_group_role:
+        verb: PUT
+        path: /groups/{groupId}/roles/{groupRoleId}
+        params:
+        - group_id
+        - group_role_id
+        - update_group_role_request
+        read_only: false
+        security: closed
+        desc: Update Group Role
+  instances:
+    methods:
+      close_instance:
+        verb: DELETE
+        path: /instances/{worldId}:{instanceId}
+        params:
+        - world_id
+        - instance_id
+        - hard_close
+        - closed_at
+        read_only: false
+        security: closed
+        desc: Close Instance
+      create_instance:
+        verb: POST
+        path: /instances
+        params:
+        - create_instance_request
+        read_only: false
+        security: closed
+        desc: Create Instance
+      get_instance:
+        verb: GET
+        path: /instances/{worldId}:{instanceId}
+        params:
+        - world_id
+        - instance_id
+        read_only: true
+        security: open
+        desc: Get Instance
+      get_instance_by_short_name:
+        verb: GET
+        path: /instances/s/{shortName}
+        params:
+        - short_name
+        read_only: true
+        security: open
+        desc: Get Instance By Short Name
+      get_recent_locations:
+        verb: GET
+        path: /instances/recent
+        params:
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List Recent Locations
+      get_short_name:
+        verb: GET
+        path: /instances/{worldId}:{instanceId}/shortName
+        params:
+        - world_id
+        - instance_id
+        read_only: true
+        security: open
+        desc: Get Instance Short Name
+  inventory:
+    methods:
+      consume_own_inventory_item:
+        verb: PUT
+        path: /inventory/{inventoryItemId}/consume
+        params:
+        - inventory_item_id
+        read_only: false
+        security: closed
+        desc: Consume Own Inventory Item
+      delete_own_inventory_item:
+        verb: DELETE
+        path: /inventory/{inventoryItemId}
+        params:
+        - inventory_item_id
+        read_only: false
+        security: closed
+        desc: Delete Own Inventory Item
+      equip_own_inventory_item:
+        verb: PUT
+        path: /inventory/{inventoryItemId}/equip
+        params:
+        - inventory_item_id
+        - equip_inventory_item_request
+        read_only: false
+        security: closed
+        desc: Equip Own Inventory Item
+      get_inventory:
+        verb: GET
+        path: /inventory
+        params:
+        - n
+        - offset
+        - holder_id
+        - equip_slot
+        - order
+        - tags
+        - types
+        - flags
+        - not_types
+        - not_flags
+        - archived
+        read_only: true
+        security: open
+        desc: Get Inventory
+      get_inventory_collections:
+        verb: GET
+        path: /inventory/collections
+        params: []
+        read_only: true
+        security: open
+        desc: List Inventory Collections
+      get_inventory_drops:
+        verb: GET
+        path: /inventory/drops
+        params:
+        - active
+        read_only: true
+        security: open
+        desc: List Inventory Drops
+      get_inventory_template:
+        verb: GET
+        path: /inventory/template/{inventoryTemplateId}
+        params:
+        - inventory_template_id
+        read_only: true
+        security: open
+        desc: Get Inventory Template
+      get_own_inventory_item:
+        verb: GET
+        path: /inventory/{inventoryItemId}
+        params:
+        - inventory_item_id
+        read_only: true
+        security: open
+        desc: Get Own Inventory Item
+      get_user_inventory_item:
+        verb: GET
+        path: /user/{userId}/inventory/{inventoryItemId}
+        params:
+        - user_id
+        - inventory_item_id
+        read_only: true
+        security: open
+        desc: Get User Inventory Item
+      share_inventory_item_direct:
+        verb: POST
+        path: /inventory/cloning/direct
+        params:
+        - item_id
+        - duration
+        - share_inventory_item_direct_request
+        read_only: false
+        security: whitelist
+        desc: Share Inventory Item Direct
+      share_inventory_item_pedestal:
+        verb: GET
+        path: /inventory/cloning/pedestal
+        params:
+        - item_id
+        - duration
+        read_only: true
+        security: open
+        desc: Share Inventory Item by Pedestal
+      spawn_inventory_item:
+        verb: GET
+        path: /inventory/spawn
+        params:
+        - id
+        read_only: true
+        security: open
+        desc: Spawn Inventory Item
+      unequip_own_inventory_slot:
+        verb: DELETE
+        path: /inventory/{inventoryItemId}/equip
+        params:
+        - inventory_item_id
+        read_only: false
+        security: whitelist
+        desc: Unequip Own Inventory Slot
+      update_own_inventory_item:
+        verb: PUT
+        path: /inventory/{inventoryItemId}
+        params:
+        - inventory_item_id
+        - update_inventory_item_request
+        read_only: false
+        security: whitelist
+        desc: Update Own Inventory Item
+  invite:
+    methods:
+      get_invite_message:
+        verb: GET
+        path: /message/{userId}/{messageType}/{slot}
+        params:
+        - user_id
+        - message_type
+        - slot
+        read_only: true
+        security: open
+        desc: Get Invite Message
+      get_invite_messages:
+        verb: GET
+        path: /message/{userId}/{messageType}
+        params:
+        - user_id
+        - message_type
+        read_only: true
+        security: open
+        desc: List Invite Messages
+      invite_myself_to:
+        verb: POST
+        path: /invite/myself/to/{worldId}:{instanceId}
+        params:
+        - world_id
+        - instance_id
+        read_only: false
+        security: whitelist
+        desc: Invite Myself To Instance
+      invite_user:
+        verb: POST
+        path: /invite/{userId}
+        params:
+        - user_id
+        - invite_request
+        read_only: false
+        security: whitelist
+        desc: Invite User
+      invite_user_with_photo:
+        verb: POST
+        path: /invite/{userId}/photo
+        params:
+        - user_id
+        - data
+        - image
+        read_only: false
+        security: whitelist
+        desc: Invite User with photo
+      request_invite:
+        verb: POST
+        path: /requestInvite/{userId}
+        params:
+        - user_id
+        - request_invite_request
+        read_only: false
+        security: whitelist
+        desc: Request Invite
+      request_invite_with_photo:
+        verb: POST
+        path: /requestInvite/{userId}/photo
+        params:
+        - user_id
+        - data
+        - image
+        read_only: false
+        security: whitelist
+        desc: Request Invite with photo
+      reset_invite_message:
+        verb: DELETE
+        path: /message/{userId}/{messageType}/{slot}
+        params:
+        - user_id
+        - message_type
+        - slot
+        read_only: false
+        security: whitelist
+        desc: Reset Invite Message
+      respond_invite:
+        verb: POST
+        path: /invite/{notificationId}/response
+        params:
+        - notification_id
+        - invite_response
+        read_only: false
+        security: whitelist
+        desc: Respond Invite
+      respond_invite_with_photo:
+        verb: POST
+        path: /invite/{notificationId}/response/photo
+        params:
+        - notification_id
+        - data
+        - image
+        read_only: false
+        security: whitelist
+        desc: Respond Invite with photo
+      update_invite_message:
+        verb: PUT
+        path: /message/{userId}/{messageType}/{slot}
+        params:
+        - user_id
+        - message_type
+        - slot
+        - update_invite_message_request
+        read_only: false
+        security: whitelist
+        desc: Update Invite Message
+  jams:
+    methods:
+      get_jam:
+        verb: GET
+        path: /jams/{jamId}
+        params:
+        - jam_id
+        read_only: true
+        security: open
+        desc: Show jam information
+      get_jam_submissions:
+        verb: GET
+        path: /jams/{jamId}/submissions
+        params:
+        - jam_id
+        read_only: true
+        security: open
+        desc: Show jam submissions
+      get_jams:
+        verb: GET
+        path: /jams
+        params:
+        - type
+        read_only: true
+        security: open
+        desc: Show jams list
+  miscellaneous:
+    methods:
+      get_assigned_permissions:
+        verb: GET
+        path: /auth/permissions
+        params: []
+        read_only: true
+        security: open
+        desc: Get Assigned Permissions
+      get_config:
+        verb: GET
+        path: /config
+        params: []
+        read_only: true
+        security: open
+        desc: Fetch API Config
+      get_css:
+        verb: GET
+        path: /css/app.css
+        params:
+        - variant
+        - branch
+        read_only: true
+        security: open
+        desc: Download CSS
+      get_current_online_users:
+        verb: GET
+        path: /visits
+        params: []
+        read_only: true
+        security: open
+        desc: Current Online Users
+      get_health:
+        verb: GET
+        path: /health
+        params: []
+        read_only: true
+        security: open
+        desc: Check API Health
+      get_info_push:
+        verb: GET
+        path: /infoPush
+        params:
+        - require
+        - include
+        read_only: true
+        security: open
+        desc: Show Information Notices
+      get_java_script:
+        verb: GET
+        path: /js/app.js
+        params:
+        - variant
+        - branch
+        read_only: true
+        security: open
+        desc: Download JavaScript
+      get_permission:
+        verb: GET
+        path: /permissions/{permissionId}
+        params:
+        - permission_id
+        read_only: true
+        security: open
+        desc: Get Permission
+      get_system_time:
+        verb: GET
+        path: /time
+        params: []
+        read_only: true
+        security: open
+        desc: Current System Time
+  notifications:
+    methods:
+      accept_friend_request:
+        verb: PUT
+        path: /auth/user/notifications/{notificationId}/accept
+        params:
+        - notification_id
+        read_only: false
+        security: whitelist
+        desc: Accept Friend Request
+      acknowledge_notification_v2:
+        verb: POST
+        path: /notifications/{notificationId}/see
+        params:
+        - notification_id
+        read_only: false
+        security: whitelist
+        desc: Acknowledge NotificationV2
+      clear_notifications:
+        verb: PUT
+        path: /auth/user/notifications/clear
+        params: []
+        read_only: false
+        security: whitelist
+        desc: Clear All Notifications
+      delete_all_notification_v2s:
+        verb: DELETE
+        path: /notifications
+        params: []
+        read_only: false
+        security: whitelist
+        desc: Delete All NotificationV2s
+      delete_notification:
+        verb: PUT
+        path: /auth/user/notifications/{notificationId}/hide
+        params:
+        - notification_id
+        read_only: false
+        security: whitelist
+        desc: Delete Notification
+      delete_notification_v2:
+        verb: DELETE
+        path: /notifications/{notificationId}
+        params:
+        - notification_id
+        read_only: false
+        security: whitelist
+        desc: Delete NotificationV2
+      get_notification:
+        verb: GET
+        path: /auth/user/notifications/{notificationId}
+        params:
+        - notification_id
+        read_only: true
+        security: open
+        desc: Show notification
+      get_notification_v2:
+        verb: GET
+        path: /notifications/{notificationId}
+        params:
+        - notification_id
+        read_only: true
+        security: open
+        desc: Get NotificationV2
+      get_notification_v2s:
+        verb: GET
+        path: /notifications
+        params:
+        - limit
+        read_only: true
+        security: open
+        desc: List NotificationV2s
+      get_notifications:
+        verb: GET
+        path: /auth/user/notifications
+        params:
+        - type
+        - sent
+        - hidden
+        - after
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List Notifications
+      mark_notification_as_read:
+        verb: PUT
+        path: /auth/user/notifications/{notificationId}/see
+        params:
+        - notification_id
+        read_only: false
+        security: whitelist
+        desc: Mark Notification As Read
+      reply_notification_v2:
+        verb: POST
+        path: /notifications/{notificationId}/reply
+        params:
+        - notification_id
+        - body
+        read_only: false
+        security: whitelist
+        desc: Reply NotificationV2
+      respond_notification_v2:
+        verb: POST
+        path: /notifications/{notificationId}/respond
+        params:
+        - notification_id
+        - respond_notification_v2_request
+        read_only: false
+        security: whitelist
+        desc: Respond NotificationV2
+  playermoderation:
+    methods:
+      clear_all_player_moderations:
+        verb: DELETE
+        path: /auth/user/playermoderations
+        params: []
+        read_only: false
+        security: closed
+        desc: Clear All Player Moderations
+      get_player_moderations:
+        verb: GET
+        path: /auth/user/playermoderations
+        params:
+        - type
+        - target_user_id
+        read_only: true
+        security: open
+        desc: Search Player Moderations
+      moderate_user:
+        verb: POST
+        path: /auth/user/playermoderations
+        params:
+        - moderate_user_request
+        read_only: false
+        security: closed
+        desc: Moderate User
+      unmoderate_user:
+        verb: PUT
+        path: /auth/user/unplayermoderate
+        params:
+        - moderate_user_request
+        read_only: false
+        security: whitelist
+        desc: Unmoderate User
+  prints:
+    methods:
+      delete_print:
+        verb: DELETE
+        path: /prints/{printId}
+        params:
+        - print_id
+        read_only: false
+        security: closed
+        desc: Delete Print
+      edit_print:
+        verb: POST
+        path: /prints/{printId}
+        params:
+        - print_id
+        - image
+        - note
+        read_only: false
+        security: closed
+        desc: Edit Print
+      get_print:
+        verb: GET
+        path: /prints/{printId}
+        params:
+        - print_id
+        read_only: true
+        security: open
+        desc: Get Print
+      get_user_prints:
+        verb: GET
+        path: /prints/user/{userId}
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get Own Prints
+      upload_print:
+        verb: POST
+        path: /prints
+        params:
+        - image
+        - timestamp
+        - note
+        - world_id
+        - world_name
+        read_only: false
+        security: closed
+        desc: Upload Print
+  props:
+    methods:
+      create_prop:
+        verb: POST
+        path: /props
+        params:
+        - create_prop_request
+        read_only: false
+        security: closed
+        desc: Create Prop
+      delete_prop:
+        verb: DELETE
+        path: /props/{propId}
+        params:
+        - prop_id
+        read_only: false
+        security: closed
+        desc: Delete Prop
+      get_prop:
+        verb: GET
+        path: /props/{propId}
+        params:
+        - prop_id
+        read_only: true
+        security: open
+        desc: Get Prop
+      get_prop_publish_status:
+        verb: GET
+        path: /props/{propId}/publish
+        params:
+        - prop_id
+        read_only: true
+        security: open
+        desc: Get Prop Publish Status
+      list_props:
+        verb: GET
+        path: /props
+        params:
+        - author_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: List Props
+      publish_prop:
+        verb: PUT
+        path: /props/{propId}/publish
+        params:
+        - prop_id
+        read_only: false
+        security: closed
+        desc: Publish Prop
+      unpublish_prop:
+        verb: DELETE
+        path: /props/{propId}/publish
+        params:
+        - prop_id
+        read_only: false
+        security: whitelist
+        desc: Unpublish Prop
+      update_prop:
+        verb: PUT
+        path: /props/{propId}
+        params:
+        - prop_id
+        - update_prop_request
+        read_only: false
+        security: closed
+        desc: Update Prop
+  users:
+    methods:
+      add_tags:
+        verb: POST
+        path: /users/{userId}/addTags
+        params:
+        - user_id
+        - change_user_tags_request
+        read_only: false
+        security: whitelist
+        desc: Add User Tags
+      check_user_persistence_exists:
+        verb: GET
+        path: /users/{userId}/{worldId}/persist/exists
+        params:
+        - user_id
+        - world_id
+        read_only: true
+        security: open
+        desc: Check User Persistence Exists
+      delete_all_user_persistence_data:
+        verb: DELETE
+        path: /users/{userId}/persist
+        params:
+        - user_id
+        read_only: false
+        security: whitelist
+        desc: Delete All User Persistence Data
+      delete_user_persistence:
+        verb: DELETE
+        path: /users/{userId}/{worldId}/persist
+        params:
+        - user_id
+        - world_id
+        read_only: false
+        security: closed
+        desc: Delete User Persistence
+      get_blocked_groups:
+        verb: GET
+        path: /users/{userId}/groups/userblocked
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User Group Blocks
+      get_invited_groups:
+        verb: GET
+        path: /users/{userId}/groups/invited
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User Group Invited
+      get_mutual_friends:
+        verb: GET
+        path: /users/{userId}/mutuals/friends
+        params:
+        - user_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Get User Mutual Friends
+      get_mutual_groups:
+        verb: GET
+        path: /users/{userId}/mutuals/groups
+        params:
+        - user_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Get User Mutual Groups
+      get_mutuals:
+        verb: GET
+        path: /users/{userId}/mutuals
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User Mutuals
+      get_user:
+        verb: GET
+        path: /users/{userId}
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User by ID
+      get_user_all_group_permissions:
+        verb: GET
+        path: /users/{userId}/groups/permissions
+        params:
+        - user_id
+        - group_ids
+        read_only: true
+        security: open
+        desc: Get user's permissions for all joined groups.
+      get_user_by_name:
+        verb: GET
+        path: /users/{username}/name
+        params:
+        - username
+        read_only: true
+        security: open
+        desc: Get User by Username
+      get_user_feedback:
+        verb: GET
+        path: /users/{userId}/feedback
+        params:
+        - user_id
+        - content_id
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Get User Feedback
+      get_user_group_instances:
+        verb: GET
+        path: /users/{userId}/instances/groups
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User Group Instances
+      get_user_group_instances_for_group:
+        verb: GET
+        path: /users/{userId}/instances/groups/{groupId}
+        params:
+        - user_id
+        - group_id
+        read_only: true
+        security: open
+        desc: Get User Group Instances for a specific Group
+      get_user_group_requests:
+        verb: GET
+        path: /users/{userId}/groups/requested
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User Group Requests
+      get_user_groups:
+        verb: GET
+        path: /users/{userId}/groups
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get User Groups
+      get_user_note:
+        verb: GET
+        path: /userNotes/{userNoteId}
+        params:
+        - user_note_id
+        read_only: true
+        security: open
+        desc: Get User Note
+      get_user_notes:
+        verb: GET
+        path: /userNotes
+        params:
+        - n
+        - offset
+        read_only: true
+        security: open
+        desc: Get User Notes
+      get_user_represented_group:
+        verb: GET
+        path: /users/{userId}/groups/represented
+        params:
+        - user_id
+        read_only: true
+        security: open
+        desc: Get user's current represented group
+      remove_tags:
+        verb: POST
+        path: /users/{userId}/removeTags
+        params:
+        - user_id
+        - change_user_tags_request
+        read_only: false
+        security: whitelist
+        desc: Remove User Tags
+      search_users:
+        verb: GET
+        path: /users
+        params:
+        - search
+        - developer_type
+        - n
+        - offset
+        - is_internal_variant
+        read_only: true
+        security: open
+        desc: Search All Users
+      update_badge:
+        verb: PUT
+        path: /users/{userId}/badges/{badgeId}
+        params:
+        - user_id
+        - badge_id
+        - update_user_badge_request
+        read_only: false
+        security: whitelist
+        desc: Update User Badge
+      update_user:
+        verb: PUT
+        path: /users/{userId}
+        params:
+        - user_id
+        - update_user_request
+        read_only: false
+        security: whitelist
+        desc: Update User Info
+      update_user_note:
+        verb: POST
+        path: /userNotes
+        params:
+        - update_user_note_request
+        read_only: false
+        security: whitelist
+        desc: Update User Note
+  worlds:
+    methods:
+      check_user_persistence_exists:
+        verb: GET
+        path: /users/{userId}/{worldId}/persist/exists
+        params:
+        - user_id
+        - world_id
+        read_only: true
+        security: open
+        desc: Check User Persistence Exists
+      create_world:
+        verb: POST
+        path: /worlds
+        params:
+        - create_world_request
+        read_only: false
+        security: closed
+        desc: Create World
+      delete_all_user_persistence_data:
+        verb: DELETE
+        path: /users/{userId}/persist
+        params:
+        - user_id
+        read_only: false
+        security: whitelist
+        desc: Delete All User Persistence Data
+      delete_user_persistence:
+        verb: DELETE
+        path: /users/{userId}/{worldId}/persist
+        params:
+        - user_id
+        - world_id
+        read_only: false
+        security: closed
+        desc: Delete User Persistence
+      delete_world:
+        verb: DELETE
+        path: /worlds/{worldId}
+        params:
+        - world_id
+        read_only: false
+        security: closed
+        desc: Delete World
+      get_active_worlds:
+        verb: GET
+        path: /worlds/active
+        params:
+        - featured
+        - sort
+        - n
+        - order
+        - offset
+        - search
+        - tag
+        - notag
+        - release_status
+        - max_unity_version
+        - min_unity_version
+        - platform
+        - noplatform
+        read_only: true
+        security: open
+        desc: List Active Worlds
+      get_favorited_worlds:
+        verb: GET
+        path: /worlds/favorites
+        params:
+        - featured
+        - sort
+        - n
+        - order
+        - offset
+        - search
+        - tag
+        - notag
+        - release_status
+        - max_unity_version
+        - min_unity_version
+        - platform
+        - user_id
+        read_only: true
+        security: open
+        desc: List Favorited Worlds
+      get_recent_worlds:
+        verb: GET
+        path: /worlds/recent
+        params:
+        - featured
+        - sort
+        - n
+        - order
+        - offset
+        - search
+        - tag
+        - notag
+        - release_status
+        - max_unity_version
+        - min_unity_version
+        - platform
+        - user_id
+        read_only: true
+        security: open
+        desc: List Recent Worlds
+      get_world:
+        verb: GET
+        path: /worlds/{worldId}
+        params:
+        - world_id
+        read_only: true
+        security: open
+        desc: Get World by ID
+      get_world_instance:
+        verb: GET
+        path: /worlds/{worldId}/{instanceId}
+        params:
+        - world_id
+        - instance_id
+        read_only: true
+        security: open
+        desc: Get World Instance
+      get_world_metadata:
+        verb: GET
+        path: /worlds/{worldId}/metadata
+        params:
+        - world_id
+        read_only: true
+        security: open
+        desc: Get World Metadata
+      get_world_publish_status:
+        verb: GET
+        path: /worlds/{worldId}/publish
+        params:
+        - world_id
+        read_only: true
+        security: open
+        desc: Get World Publish Status
+      publish_world:
+        verb: PUT
+        path: /worlds/{worldId}/publish
+        params:
+        - world_id
+        read_only: false
+        security: whitelist
+        desc: Publish World
+      search_worlds:
+        verb: GET
+        path: /worlds
+        params:
+        - featured
+        - sort
+        - user
+        - user_id
+        - n
+        - order
+        - offset
+        - search
+        - tag
+        - notag
+        - release_status
+        - max_unity_version
+        - min_unity_version
+        - platform
+        - noplatform
+        - fuzzy
+        - avatar_specific
+        read_only: true
+        security: open
+        desc: Search All Worlds
+      unpublish_world:
+        verb: DELETE
+        path: /worlds/{worldId}/publish
+        params:
+        - world_id
+        read_only: false
+        security: whitelist
+        desc: Unpublish World
+      update_world:
+        verb: PUT
+        path: /worlds/{worldId}
+        params:
+        - world_id
+        - update_world_request
+        read_only: false
+        security: closed
+        desc: Update World
